@@ -11,7 +11,7 @@ const THEMES: Record<string, CreatureTheme> = {
   Волк: { body: "#8a93a6", belly: "#e7ecf3", accent: "#525b6b", earShape: "pointed" },
   Тигр: { body: "#f0a03c", belly: "#fff1d6", accent: "#3a2a1a", earShape: "round", decoration: "stripes" },
   Дракон: { body: "#5bc98e", belly: "#e3fff0", accent: "#1f6b47", earShape: "pointed", decoration: "spikes" },
-  unknown: { body: "#a7a0c9", belly: "#eeeaff", accent: "#5a5480", earShape: "round" },
+  unknown: { body: "#c99a44", belly: "#ede1c4", accent: "#5a3f1f", earShape: "round" },
 };
 
 function Ears({ theme }: { theme: CreatureTheme }) {

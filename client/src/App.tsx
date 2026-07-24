@@ -331,9 +331,12 @@ export default function App() {
       )}
 
       <header className="app-header">
-        <h1>
-          <PawPrint size={22} /> WalkPet
-        </h1>
+        <div>
+          <span className="app-eyebrow">Журнал №{String(pet.id).padStart(3, "0")}</span>
+          <h1>
+            <PawPrint size={22} /> WalkPet
+          </h1>
+        </div>
         <div className="header-actions">
           <button type="button" className="stats-toggle-btn" onClick={() => setShowStats((s) => !s)} aria-label="Статистика">
             <BarChart3 size={18} />
