@@ -18,6 +18,7 @@ import StepRing from "./components/StepRing";
 import Toasts, { type ToastItem } from "./components/Toasts";
 import AvatarGenerator from "./components/AvatarGenerator";
 import GoogleFitConnect from "./components/GoogleFitConnect";
+import GoogleFitOnboarding from "./components/GoogleFitOnboarding";
 import StatsScreen from "./components/StatsScreen";
 import {
   Heart,
@@ -65,6 +66,8 @@ function StatChip({ icon: Icon, label, value }: { icon: typeof Heart; label: str
 
 let toastSeq = 0;
 
+const ONBOARDING_SEEN_KEY = "walkpet_google_fit_onboarding_seen";
+
 export default function App() {
   const [pet, setPet] = useState<Pet | null>(null);
   const [todaySteps, setTodaySteps] = useState(0);
@@ -73,6 +76,7 @@ export default function App() {
   const [stepTick, setStepTick] = useState(0);
   const [googleFitConnected, setGoogleFitConnected] = useState<boolean | null>(null);
   const [showStats, setShowStats] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
   const pendingStepsRef = useRef(0);
   const lastSyncedStepsRef = useRef(0);
   const debugModeRef = useRef(false);
@@ -180,6 +184,27 @@ export default function App() {
     return () => clearInterval(interval);
   }, [googleFitConnected]);
 
+  // First-run nudge: a brand-new egg (no steps yet) with no Google Fit connection means step
+  // tracking can't do anything yet, so prompt to connect right away instead of leaving the
+  // player staring at a stuck egg. Shown once per device via localStorage.
+  useEffect(() => {
+    if (!pet || googleFitConnected === null) return;
+    if (pet.stage !== "egg" || pet.lifetime_steps > 0 || googleFitConnected) return;
+    if (localStorage.getItem(ONBOARDING_SEEN_KEY)) return;
+    setShowOnboarding(true);
+  }, [pet, googleFitConnected]);
+
+  // Close the onboarding modal on its own once the user actually connects (they may have
+  // done it via the header button while the modal was open, or come back from the OAuth tab).
+  useEffect(() => {
+    if (googleFitConnected) setShowOnboarding(false);
+  }, [googleFitConnected]);
+
+  const dismissOnboarding = () => {
+    localStorage.setItem(ONBOARDING_SEEN_KEY, "1");
+    setShowOnboarding(false);
+  };
+
   const handleConnectGoogleFit = () => {
     startGoogleFitAuth()
       .then(({ url }) => {
@@ -272,6 +297,16 @@ export default function App() {
   return (
     <div className="app-shell">
       <Toasts toasts={toasts} />
+
+      {showOnboarding && (
+        <GoogleFitOnboarding
+          onConnect={() => {
+            handleConnectGoogleFit();
+            dismissOnboarding();
+          }}
+          onClose={dismissOnboarding}
+        />
+      )}
 
       <header className="app-header">
         <h1>

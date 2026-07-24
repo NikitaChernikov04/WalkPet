@@ -705,6 +705,95 @@ body {
   to { opacity: 0; transform: translateY(-14px); }
 }
 
+/* --- Google Fit onboarding modal --- */
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 5, 22, 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 100;
+}
+
+.modal-card {
+  position: relative;
+  background: linear-gradient(180deg, #2a1a52, #1a0f38);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  padding: 28px 20px 20px;
+  max-width: 340px;
+  width: 100%;
+  text-align: center;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+}
+
+.modal-icon {
+  color: #7cf29c;
+  margin-bottom: 8px;
+}
+
+.modal-card h2 {
+  margin: 0 0 8px;
+  font-size: 1.15rem;
+}
+
+.modal-card p {
+  margin: 0 0 18px;
+  font-size: 0.88rem;
+  line-height: 1.4;
+  opacity: 0.85;
+}
+
+.modal-primary-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  justify-content: center;
+  padding: 12px 16px;
+}
+
+.modal-close-btn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: transparent;
+  padding: 6px;
+  margin: 0;
+  opacity: 0.6;
+}
+
+.modal-close-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  opacity: 1;
+}
+
+.modal-install-hint {
+  margin-top: 16px;
+  font-size: 0.78rem;
+  opacity: 0.7;
+}
+
+.modal-install-links {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.modal-install-links button {
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 0.78rem;
+  padding: 6px 12px;
+}
+
+.modal-install-links button:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
 /* --- Buttons / debug --- */
 
 button {
