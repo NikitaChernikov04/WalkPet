@@ -1,0 +1,18 @@
+{
+  "name": "walkpet",
+  "private": true,
+  "workspaces": [
+    "client"
+  ],
+  "dependencies": {
+    "@libsql/client": "^0.14.0",
+    "pngjs": "^7.0.0",
+    "telegraf": "^4.16.3",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/pngjs": "^6.0.5",
+    "@vercel/node": "^3.2.24",
+    "vercel": "^56.5.0"
+  }
+}
