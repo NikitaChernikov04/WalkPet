@@ -110,6 +110,7 @@ export default function App() {
   const preDebugSnapshotRef = useRef<{ pet: Pet; todaySteps: number } | null>(null);
   const prevTodayStepsRef = useRef(0);
   const prevStageRef = useRef<string | null>(null);
+  const prevLevelRef = useRef<number | null>(null);
   const currentDateRef = useRef(new Date().toISOString().slice(0, 10));
 
   const pushToast = (text: string) => {
@@ -129,6 +130,7 @@ export default function App() {
         lastSyncedStepsRef.current = todaySteps;
         prevTodayStepsRef.current = todaySteps;
         prevStageRef.current = pet.stage;
+        prevLevelRef.current = pet.level;
       })
       .catch((e) => setError(String(e)));
   }, []);
@@ -253,6 +255,19 @@ export default function App() {
       if (pet.stage === "hatched") pushToast(`🎉 Питомец вылупился — это ${pet.species}!`);
     }
     prevStageRef.current = pet.stage;
+
+    // Level progress resets to 0 the instant a level-up happens — without this, that reset
+    // looks like the counter randomly dropped instead of "you just leveled up".
+    if (prevLevelRef.current !== null && pet.level > prevLevelRef.current) {
+      const prevEvolutionStage = evolutionStageForLevel(prevLevelRef.current);
+      const newEvolutionStage = evolutionStageForLevel(pet.level);
+      if (newEvolutionStage !== prevEvolutionStage) {
+        pushToast(`🧬 Питомец эволюционировал: ${EVOLUTION_STAGE_LABELS[newEvolutionStage]}! (Ур. ${pet.level})`);
+      } else {
+        pushToast(`⭐ Новый уровень: ${pet.level}!`);
+      }
+    }
+    prevLevelRef.current = pet.level;
   }, [todaySteps, pet]);
 
   // Debug controls are meant to be used without a real device or Google Fit fighting them
