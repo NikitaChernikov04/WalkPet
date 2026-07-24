@@ -6,6 +6,8 @@ export interface Pet {
   stage: "egg" | "cracking" | "hatched";
   species: string;
   rarity: Rarity;
+  level: number;
+  name: string | null;
   lifetime_steps: number;
   health: number;
   happiness: number;
@@ -54,6 +56,26 @@ export async function requestAvatar(description: string): Promise<{ pet: Pet }> 
     body: JSON.stringify({ description }),
   });
   if (!res.ok) throw new Error(`POST /api/avatar failed: ${res.status}`);
+  return res.json();
+}
+
+export async function generateAiPetName(): Promise<{ pet: Pet }> {
+  const res = await fetch("/api/pet-name", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...initDataHeader() },
+    body: JSON.stringify({ mode: "ai" }),
+  });
+  if (!res.ok) throw new Error(`POST /api/pet-name failed: ${res.status}`);
+  return res.json();
+}
+
+export async function setCustomPetName(name: string): Promise<{ pet: Pet }> {
+  const res = await fetch("/api/pet-name", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...initDataHeader() },
+    body: JSON.stringify({ mode: "custom", name }),
+  });
+  if (!res.ok) throw new Error(`POST /api/pet-name failed: ${res.status}`);
   return res.json();
 }
 

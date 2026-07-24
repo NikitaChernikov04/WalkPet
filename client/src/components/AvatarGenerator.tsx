@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Sparkles } from "lucide-react";
 
 export default function AvatarGenerator({
@@ -9,12 +9,6 @@ export default function AvatarGenerator({
   onGenerate: (description: string) => void;
 }) {
   const [description, setDescription] = useState("");
-  const [formOpen, setFormOpen] = useState(false);
-
-  // Once a regeneration completes, collapse back to the button instead of leaving the form open.
-  useEffect(() => {
-    if (status === "completed") setFormOpen(false);
-  }, [status]);
 
   if (status === "pending") {
     return (
@@ -25,13 +19,7 @@ export default function AvatarGenerator({
     );
   }
 
-  if (status === "completed" && !formOpen) {
-    return (
-      <button type="button" className="avatar-regen-btn" onClick={() => setFormOpen(true)}>
-        <Sparkles size={16} /> Сгенерировать заново
-      </button>
-    );
-  }
+  if (status === "completed") return null;
 
   return (
     <form

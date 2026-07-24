@@ -2,16 +2,19 @@ import { useEffect, useRef, useState } from "react";
 import "./App.css";
 import {
   fetchPet,
+  generateAiPetName,
   getGoogleFitStatus,
   pollAvatar,
   requestAvatar,
   restoreDebugSnapshot,
+  setCustomPetName,
   startGoogleFitAuth,
   syncGoogleFit,
   syncSteps,
   type Pet,
   type Rarity,
 } from "./lib/api";
+import { evolutionStageForLevel, EVOLUTION_STAGE_LABELS, levelProgress } from "./lib/leveling";
 import PetScene from "./components/PetScene";
 import EggScene from "./components/EggScene";
 import StepRing from "./components/StepRing";
@@ -19,6 +22,7 @@ import Toasts, { type ToastItem } from "./components/Toasts";
 import AvatarGenerator from "./components/AvatarGenerator";
 import GoogleFitConnect from "./components/GoogleFitConnect";
 import GoogleFitOnboarding from "./components/GoogleFitOnboarding";
+import PetNameEditor from "./components/PetNameEditor";
 import StatsScreen from "./components/StatsScreen";
 import {
   Heart,
@@ -52,12 +56,12 @@ const MILESTONES = [
   { steps: 15000, icon: Compass, label: "Приключение", toast: "🗺 Приключение! +5 интеллекта" },
 ];
 
-function StatChip({ icon: Icon, label, value }: { icon: typeof Heart; label: string; value: number }) {
+function StatChip({ icon: Icon, label, value, max = 100 }: { icon: typeof Heart; label: string; value: number; max?: number }) {
   return (
     <div className="stat-chip" title={label}>
       <Icon size={14} />
       <div className="stat-chip-track">
-        <div className="stat-chip-fill" style={{ height: `${value}%` }} />
+        <div className="stat-chip-fill" style={{ height: `${Math.min(100, (value / max) * 100)}%` }} />
       </div>
       <span>{value}</span>
     </div>
@@ -288,6 +292,25 @@ export default function App() {
       .catch((e) => setError(String(e)));
   };
 
+  const handleGenerateAiName = async () => {
+    try {
+      const { pet } = await generateAiPetName();
+      setPet(pet);
+      pushToast(`✨ Кличка: ${pet.name}`);
+    } catch (e) {
+      setError(String(e));
+    }
+  };
+
+  const handleSetCustomName = async (name: string) => {
+    try {
+      const { pet } = await setCustomPetName(name);
+      setPet(pet);
+    } catch (e) {
+      setError(String(e));
+    }
+  };
+
   if (error) return <div className="app-shell error">Ошибка: {error}</div>;
   if (!pet) return <div className="app-shell loading">Загрузка…</div>;
 
@@ -340,6 +363,8 @@ export default function App() {
               mood={mood}
               stepTick={stepTick}
               onGenerateAvatar={handleGenerateAvatar}
+              onGenerateAiName={handleGenerateAiName}
+              onSetCustomName={handleSetCustomName}
             />
           )}
         </>
@@ -395,31 +420,57 @@ function PetPanel({
   mood,
   stepTick,
   onGenerateAvatar,
+  onGenerateAiName,
+  onSetCustomName,
 }: {
   pet: Pet;
   todaySteps: number;
   mood: "great" | "ok" | "low";
   stepTick: number;
   onGenerateAvatar: (description: string) => void;
+  onGenerateAiName: () => Promise<void>;
+  onSetCustomName: (name: string) => Promise<void>;
 }) {
+  const statCap = 100 + pet.level * 2;
+  const postHatchSteps = Math.max(0, pet.lifetime_steps - EGG_HATCH_STEPS);
+  const { into, span } = levelProgress(postHatchSteps, pet.level);
+  const levelPct = span > 0 ? Math.min(100, (into / span) * 100) : 100;
+  const evolutionStage = evolutionStageForLevel(pet.level);
+
   return (
     <div className="panel">
       <div className="scene-frame">
         <div className="stats-rail">
-          <StatChip icon={Heart} label="Здоровье" value={pet.health} />
-          <StatChip icon={Smile} label="Счастье" value={pet.happiness} />
+          <StatChip icon={Heart} label="Здоровье" value={pet.health} max={statCap} />
+          <StatChip icon={Smile} label="Счастье" value={pet.happiness} max={statCap} />
         </div>
 
         <PetScene species={pet.species} mood={mood} stepTick={stepTick} avatarUrl={pet.avatar_url} />
 
         <div className="stats-rail">
-          <StatChip icon={Brain} label="Интеллект" value={pet.intellect} />
-          <StatChip icon={Dumbbell} label="Сила" value={pet.strength} />
+          <StatChip icon={Brain} label="Интеллект" value={pet.intellect} max={statCap} />
+          <StatChip icon={Dumbbell} label="Сила" value={pet.strength} max={statCap} />
         </div>
       </div>
 
-      <h2>{pet.species}</h2>
+      <h2>{pet.name ?? pet.species}</h2>
+      {pet.name && <p className="pet-species-sub">{pet.species}</p>}
       <span className={`rarity-badge rarity-${pet.rarity}`}>{RARITY_LABELS[pet.rarity]}</span>
+
+      <div className="level-block">
+        <span className="level-label">
+          Ур. {pet.level} · {EVOLUTION_STAGE_LABELS[evolutionStage]}
+        </span>
+        <div className="stat-track level-track">
+          <div className="stat-fill" style={{ width: `${levelPct}%` }} />
+        </div>
+        <span className="level-progress-text">
+          {into.toLocaleString("ru-RU")} / {span.toLocaleString("ru-RU")} шагов до след. уровня
+        </span>
+      </div>
+
+      <PetNameEditor name={pet.name} onGenerateAi={onGenerateAiName} onSetCustom={onSetCustomName} />
+
       <AvatarGenerator status={pet.avatar_status} onGenerate={onGenerateAvatar} />
 
       <div className="steps-hero">

@@ -1,3 +1,5 @@
+import { EVOLUTION_PROMPT_MODIFIERS, type EvolutionStage } from "./leveling.js";
+
 export type Rarity = "common" | "uncommon" | "rare" | "epic" | "legendary";
 
 export const RARITY_ORDER: Rarity[] = ["common", "uncommon", "rare", "epic", "legendary"];
@@ -147,14 +149,21 @@ const RARITY_PROMPT_MODIFIERS: Record<Rarity, string> = {
     "Majestic legendary presence, shimmering ethereal aura, intricate ornate details, glowing runes or star-like sparkles, a crown or majestic markings, awe-inspiring god-tier design.",
 };
 
-export function buildPetPrompt(species: string, userDescription: string, rarity: Rarity): string {
+export function buildPetPrompt(
+  species: string,
+  userDescription: string,
+  rarity: Rarity,
+  evolutionStage: EvolutionStage = "baby",
+): string {
+  const flavorSentence = userDescription.trim() ? `Player's custom flavor: ${userDescription}. ` : "";
   return (
     `Cute stylized mobile-game pet character, ${species}, full body visible from head to feet, ` +
     `either standing upright on two legs like a game mascot or posed naturally on all four legs like ` +
     `a real animal — pick whichever suits the description best. Dynamic walking pose, flat illustration ` +
     `style, vibrant colors, centered composition. Rarity tier: ${rarity}. ${RARITY_PROMPT_MODIFIERS[rarity]} ` +
+    `Evolution stage: ${evolutionStage}. ${EVOLUTION_PROMPT_MODIFIERS[evolutionStage]} ` +
     `Background: solid flat single-color chroma-key screen, pure uniform magenta color rgb(255,0,255), ` +
     `no gradient, no pattern, no texture, no shadow, no other colors anywhere in the background. ` +
-    `Player's custom flavor: ${userDescription}. No text, no watermark.`
+    `${flavorSentence}No text, no watermark.`
   );
 }

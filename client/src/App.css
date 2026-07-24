@@ -111,6 +111,94 @@ body {
   margin: 8px 0 4px;
 }
 
+.pet-species-sub {
+  margin: -2px 0 6px;
+  font-size: 0.78rem;
+  opacity: 0.6;
+}
+
+.level-block {
+  margin: 4px 0 14px;
+}
+
+.level-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  opacity: 0.9;
+}
+
+.level-track {
+  margin: 6px 0 4px;
+}
+
+.level-progress-text {
+  font-size: 0.72rem;
+  opacity: 0.6;
+}
+
+.name-editor-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 0.76rem;
+  padding: 6px 12px;
+  margin: 0 0 12px;
+  color: #fff;
+}
+
+.name-editor-toggle:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.name-editor {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 14px;
+}
+
+.name-editor-ai-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
+}
+
+.name-editor-custom {
+  display: flex;
+  gap: 6px;
+}
+
+.name-editor-custom input {
+  font-size: 0.85rem;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+  width: 140px;
+}
+
+.name-editor-custom button {
+  font-size: 0.8rem;
+  padding: 8px 12px;
+}
+
+.name-editor-cancel {
+  background: transparent;
+  font-size: 0.75rem;
+  opacity: 0.6;
+  padding: 2px 8px;
+  margin: 0;
+}
+
+.name-editor-cancel:hover {
+  background: transparent;
+  opacity: 1;
+}
+
 .rarity-badge {
   display: inline-block;
   font-size: 0.72rem;
@@ -456,21 +544,6 @@ body {
 .avatar-gen button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
-}
-
-.avatar-regen-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin: 4px 0 14px;
-  padding: 6px 12px;
-  font-size: 0.78rem;
-  background: rgba(255, 255, 255, 0.08);
-  color: #fff;
-}
-
-.avatar-regen-btn:hover {
-  background: rgba(255, 255, 255, 0.14);
 }
 
 .ring-label span {

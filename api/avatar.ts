@@ -5,6 +5,7 @@ import { resolveTelegramUser } from "./_lib/telegram.js";
 import { avatarUrlFrom, getAvatarGeneration, startAvatarGeneration } from "./_lib/nanobanana.js";
 import { fetchAndCutoutBackground } from "./_lib/imageProcessing.js";
 import { buildPetPrompt } from "./_lib/species.js";
+import { evolutionStageForLevel } from "./_lib/leveling.js";
 
 const bodySchema = z.object({ description: z.string().trim().min(1).max(300) });
 
@@ -26,7 +27,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: "pet must be hatched before generating an avatar" });
     }
 
-    const prompt = buildPetPrompt(pet.species, parsed.data.description, pet.rarity);
+    const prompt = buildPetPrompt(pet.species, parsed.data.description, pet.rarity, evolutionStageForLevel(pet.level));
     const gen = await startAvatarGeneration(prompt);
     const url = avatarUrlFrom(gen);
 

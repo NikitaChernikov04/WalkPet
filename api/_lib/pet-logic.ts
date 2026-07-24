@@ -2,6 +2,7 @@ import { db, ensureSchema } from "./db.js";
 import { refreshAccessToken } from "./googleFit.js";
 import { startAvatarGeneration } from "./nanobanana.js";
 import { buildPetPrompt, pickRandomSpecies, randomAvatarFlavor, type Rarity } from "./species.js";
+import { evolutionStageForLevel, levelForPostHatchSteps, statCapForLevel } from "./leveling.js";
 
 export const EGG_CRACK_STEPS = 3000;
 export const EGG_HATCH_STEPS = 7000;
@@ -24,6 +25,8 @@ export interface Pet {
   stage: "egg" | "cracking" | "hatched";
   species: string;
   rarity: Rarity;
+  level: number;
+  name: string | null;
   lifetime_steps: number;
   health: number;
   happiness: number;
@@ -39,7 +42,7 @@ export interface Pet {
   avatar_description: string | null;
 }
 
-const clamp = (n: number) => Math.max(0, Math.min(100, n));
+const clamp = (n: number, max = 100) => Math.max(0, Math.min(max, n));
 const today = () => new Date().toISOString().slice(0, 10);
 const yesterday = () => {
   const d = new Date();
@@ -104,6 +107,12 @@ export async function recordSteps(userId: number, stepsToday: number): Promise<P
   let { health, happiness, intellect, strength, lifetime_steps: lifetimeSteps } = pet;
   lifetimeSteps += delta;
 
+  // Level grows from steps walked since hatching; every level raises the stat ceiling a
+  // little, so this has to be known before any stat gets clamped below.
+  const postHatchSteps = Math.max(0, lifetimeSteps - EGG_HATCH_STEPS);
+  const level = levelForPostHatchSteps(postHatchSteps);
+  const statCap = statCapForLevel(level);
+
   // Streak bookkeeping, plus a tamagotchi-style stat decay for each fully inactive day since
   // this player was last seen — only computed once, the first time we see a new calendar day.
   let streakDays = pet.streak_days;
@@ -127,10 +136,10 @@ export async function recordSteps(userId: number, stepsToday: number): Promise<P
 
     if (inactiveDays > 0) {
       const decay = DECAY_PER_INACTIVE_DAY * inactiveDays;
-      health = clamp(health - decay);
-      happiness = clamp(happiness - decay);
-      intellect = clamp(intellect - decay);
-      strength = clamp(strength - decay);
+      health = clamp(health - decay, statCap);
+      happiness = clamp(happiness - decay, statCap);
+      intellect = clamp(intellect - decay, statCap);
+      strength = clamp(strength - decay, statCap);
     }
   }
 
@@ -139,10 +148,10 @@ export async function recordSteps(userId: number, stepsToday: number): Promise<P
   for (const [key, milestone] of Object.entries(MILESTONES) as [MilestoneKey, (typeof MILESTONES)[MilestoneKey]][]) {
     if (newSteps >= milestone.steps && !appliedBefore.has(key)) {
       appliedNow.add(key);
-      if (milestone.stat === "health") health = clamp(health + milestone.amount);
-      if (milestone.stat === "happiness") happiness = clamp(happiness + milestone.amount);
-      if (milestone.stat === "strength") strength = clamp(strength + milestone.amount);
-      if (milestone.stat === "intellect") intellect = clamp(intellect + milestone.amount);
+      if (milestone.stat === "health") health = clamp(health + milestone.amount, statCap);
+      if (milestone.stat === "happiness") happiness = clamp(happiness + milestone.amount, statCap);
+      if (milestone.stat === "strength") strength = clamp(strength + milestone.amount, statCap);
+      if (milestone.stat === "intellect") intellect = clamp(intellect + milestone.amount, statCap);
     }
   }
   if (appliedNow.size !== appliedBefore.size) {
@@ -153,7 +162,7 @@ export async function recordSteps(userId: number, stepsToday: number): Promise<P
   }
 
   if (streakDays > 0 && streakDays % 7 === 0 && streakDays !== pet.streak_days) {
-    happiness = clamp(happiness + 10);
+    happiness = clamp(happiness + 10, statCap);
   }
 
   let stage = pet.stage;
@@ -176,11 +185,14 @@ export async function recordSteps(userId: number, stepsToday: number): Promise<P
     rarity = picked.rarity;
   }
 
+  const evolutionStage = evolutionStageForLevel(level);
+  const evolved = !justHatched && evolutionStageForLevel(pet.level) !== evolutionStage;
+
   await db.execute({
-    sql: `UPDATE pets SET stage = ?, species = ?, rarity = ?, lifetime_steps = ?, health = ?, happiness = ?,
+    sql: `UPDATE pets SET stage = ?, species = ?, rarity = ?, level = ?, lifetime_steps = ?, health = ?, happiness = ?,
           intellect = ?, strength = ?, streak_days = ?, last_active_date = ?, hatched_at = ?
           WHERE user_id = ?`,
-    args: [stage, species, rarity, lifetimeSteps, health, happiness, intellect, strength, streakDays, date, hatchedAt, userId],
+    args: [stage, species, rarity, level, lifetimeSteps, health, happiness, intellect, strength, streakDays, date, hatchedAt, userId],
   });
 
   if (justHatched) {
@@ -189,10 +201,20 @@ export async function recordSteps(userId: number, stepsToday: number): Promise<P
     // generate one manually from the pet panel.
     try {
       const description = randomAvatarFlavor();
-      const gen = await startAvatarGeneration(buildPetPrompt(species, description, rarity));
+      const gen = await startAvatarGeneration(buildPetPrompt(species, description, rarity, evolutionStage));
       await setAvatarPending(userId, gen.id, description);
     } catch {
       // ignore — manual generation remains available
+    }
+  } else if (evolved && pet.avatar_status === "completed") {
+    // Crossing an evolution-stage boundary (baby → adult → elder → ascended) re-renders the
+    // same pet with a more powerful look, reusing whatever flavor description it already had.
+    try {
+      const description = pet.avatar_description ?? "";
+      const gen = await startAvatarGeneration(buildPetPrompt(species, description, rarity, evolutionStage));
+      await setAvatarPending(userId, gen.id, description);
+    } catch {
+      // ignore — pet keeps its current art, nothing broken
     }
   }
 
@@ -232,7 +254,7 @@ export async function restorePetSnapshot(
   }
 
   await db.execute({
-    sql: `UPDATE pets SET stage = ?, species = ?, rarity = ?, lifetime_steps = ?, health = ?, happiness = ?,
+    sql: `UPDATE pets SET stage = ?, species = ?, rarity = ?, level = ?, name = ?, lifetime_steps = ?, health = ?, happiness = ?,
           intellect = ?, strength = ?, streak_days = ?, last_active_date = ?, hatched_at = ?,
           avatar_url = ?, avatar_status = ?, avatar_generation_id = ?, avatar_description = ?
           WHERE user_id = ?`,
@@ -240,6 +262,8 @@ export async function restorePetSnapshot(
       snapshot.stage,
       snapshot.species,
       snapshot.rarity,
+      snapshot.level,
+      snapshot.name,
       snapshot.lifetime_steps,
       snapshot.health,
       snapshot.happiness,
@@ -294,6 +318,14 @@ export async function getTodaySteps(userId: number): Promise<number> {
     args: [userId, today()],
   });
   return Number((res.rows[0] as unknown as { steps: number } | undefined)?.steps ?? 0);
+}
+
+export async function setPetName(userId: number, name: string): Promise<void> {
+  await ensureSchema();
+  await db.execute({
+    sql: "UPDATE pets SET name = ? WHERE user_id = ?",
+    args: [name, userId],
+  });
 }
 
 export async function setAvatarPending(userId: number, generationId: string, description: string): Promise<void> {

@@ -16,6 +16,8 @@ const ALTER_STATEMENTS = [
   "ALTER TABLE users ADD COLUMN google_refresh_token TEXT",
   "ALTER TABLE users ADD COLUMN google_token_expiry INTEGER",
   "ALTER TABLE pets ADD COLUMN rarity TEXT NOT NULL DEFAULT 'common'",
+  "ALTER TABLE pets ADD COLUMN level INTEGER NOT NULL DEFAULT 0",
+  "ALTER TABLE pets ADD COLUMN name TEXT",
 ];
 
 // Serverless cold starts call this on every fresh instance; cheap and idempotent.
@@ -36,6 +38,8 @@ export function ensureSchema(): Promise<void> {
             stage TEXT NOT NULL DEFAULT 'egg',
             species TEXT NOT NULL DEFAULT 'unknown',
             rarity TEXT NOT NULL DEFAULT 'common',
+            level INTEGER NOT NULL DEFAULT 0,
+            name TEXT,
             lifetime_steps INTEGER NOT NULL DEFAULT 0,
             health INTEGER NOT NULL DEFAULT 50,
             happiness INTEGER NOT NULL DEFAULT 50,
