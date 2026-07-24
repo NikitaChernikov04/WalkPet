@@ -458,17 +458,14 @@ function PetPanel({
   onSetCustomName: (name: string) => Promise<void>;
 }) {
   const statCap = statCapForLevel(pet.level) + RARITY_STAT_CAP_BONUS[pet.rarity];
+  // Level XP is a direct 1:1 mirror of post-hatch steps server-side (see pet-logic.ts) —
+  // no conversion here, so this always matches the step ring's own number exactly.
   const { into, span } = levelProgress(pet.xp, pet.level);
   const levelPct = span > 0 ? Math.min(100, (into / span) * 100) : 100;
   const evolutionStage = evolutionStageForLevel(pet.level);
   const avgStat = (pet.health + pet.happiness + pet.intellect + pet.strength) / 4;
-  const xpMultiplier = statXpMultiplier(avgStat, statCap);
+  const careMultiplier = statXpMultiplier(avgStat, statCap);
   const decayResistance = RARITY_DECAY_RESISTANCE[pet.rarity];
-  // Progress is tracked in XP internally (steps × current care multiplier), but showing raw
-  // XP here reads as "wrong" — the player counted real steps and got a different number.
-  // Convert back to an estimated step count at the pet's current care level instead.
-  const stepsIntoLevel = Math.round(into / xpMultiplier);
-  const stepsSpanForLevel = Math.round(span / xpMultiplier);
 
   return (
     <div className="panel">
@@ -490,18 +487,19 @@ function PetPanel({
       {pet.name && <p className="pet-species-sub">{pet.species}</p>}
       <span className={`rarity-badge rarity-${pet.rarity}`}>{RARITY_LABELS[pet.rarity]}</span>
       <p className="rarity-effect">
-        потолок характеристик +{RARITY_STAT_CAP_BONUS[pet.rarity]} · угасание ×{decayResistance.toFixed(2)}
+        потолок характеристик +{RARITY_STAT_CAP_BONUS[pet.rarity]} · угасание ×{decayResistance.toFixed(2)} · награды ×
+        {careMultiplier.toFixed(2)}
       </p>
 
       <div className="level-block">
         <span className="level-label">
-          Ур. {pet.level} · {EVOLUTION_STAGE_LABELS[evolutionStage]} · ×{xpMultiplier.toFixed(2)} к опыту
+          Ур. {pet.level} · {EVOLUTION_STAGE_LABELS[evolutionStage]}
         </span>
         <div className="stat-track level-track">
           <div className="stat-fill" style={{ width: `${levelPct}%` }} />
         </div>
         <span className="level-progress-text">
-          {stepsIntoLevel.toLocaleString("ru-RU")} / {stepsSpanForLevel.toLocaleString("ru-RU")} шагов до след. уровня
+          {into.toLocaleString("ru-RU")} / {span.toLocaleString("ru-RU")} шагов до след. уровня
         </span>
       </div>
 

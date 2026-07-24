@@ -117,15 +117,13 @@ export async function recordSteps(userId: number, stepsToday: number): Promise<P
   let { health, happiness, intellect, strength } = pet;
   const lifetimeSteps = pet.lifetime_steps + delta;
 
-  // XP only accrues from steps walked *after* hatching, and only for the portion of today's
-  // delta earned post-hatch (handles the day hatching itself happens mid-update). How well
-  // the pet is currently cared for (its average stat vs. its own cap) scales the conversion —
-  // this is what ties the stat bars to something real instead of being purely decorative.
-  const postHatchDelta = Math.max(0, lifetimeSteps - Math.max(EGG_HATCH_STEPS, pet.lifetime_steps));
-  const oldStatCap = statCapForLevel(pet.level) + RARITY_STAT_CAP_BONUS[pet.rarity];
-  const avgStat = (health + happiness + intellect + strength) / 4;
-  const multiplier = statXpMultiplier(avgStat, oldStatCap);
-  const xp = pet.xp + Math.round(postHatchDelta * multiplier);
+  // XP is derived fresh from lifetime_steps every time (not accumulated), so it can never
+  // drift from it — "steps to next level" always matches the step ring's own number exactly,
+  // with no hidden conversion the player has no way to verify. This also self-heals any
+  // pet whose `xp` was thrown off by the now-removed care multiplier. Care/rarity effects
+  // live elsewhere (milestone reward size below, and the stat-cap/decay-resistance bonuses),
+  // never on this figure.
+  const xp = Math.max(0, lifetimeSteps - EGG_HATCH_STEPS);
   const level = levelForXp(xp);
   // Rarity permanently raises the stat ceiling on top of the level-based one, so a rarer
   // pet's care bars simply go further — this is what ties rarity to something real too.
@@ -161,15 +159,21 @@ export async function recordSteps(userId: number, stepsToday: number): Promise<P
     }
   }
 
+  // A well-kept pet (stats close to its own cap) earns a bit more from each milestone —
+  // this is where "stats affect something real" now lives, kept well away from the step/XP
+  // figures so it can never look like a step-count mismatch.
+  const careMultiplier = statXpMultiplier((health + happiness + intellect + strength) / 4, statCap);
+
   const appliedBefore = new Set((row?.milestones_applied ?? "").split(",").filter(Boolean));
   const appliedNow = new Set(appliedBefore);
   for (const [key, milestone] of Object.entries(MILESTONES) as [MilestoneKey, (typeof MILESTONES)[MilestoneKey]][]) {
     if (newSteps >= milestone.steps && !appliedBefore.has(key)) {
       appliedNow.add(key);
-      if (milestone.stat === "health") health = clamp(health + milestone.amount, statCap);
-      if (milestone.stat === "happiness") happiness = clamp(happiness + milestone.amount, statCap);
-      if (milestone.stat === "strength") strength = clamp(strength + milestone.amount, statCap);
-      if (milestone.stat === "intellect") intellect = clamp(intellect + milestone.amount, statCap);
+      const gain = Math.max(1, Math.round(milestone.amount * careMultiplier));
+      if (milestone.stat === "health") health = clamp(health + gain, statCap);
+      if (milestone.stat === "happiness") happiness = clamp(happiness + gain, statCap);
+      if (milestone.stat === "strength") strength = clamp(strength + gain, statCap);
+      if (milestone.stat === "intellect") intellect = clamp(intellect + gain, statCap);
     }
   }
   if (appliedNow.size !== appliedBefore.size) {
