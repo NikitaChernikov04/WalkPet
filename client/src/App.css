@@ -188,6 +188,7 @@ body {
   font-weight: 700;
   font-size: 1.6rem;
   margin: 10px 0 0;
+  color: var(--violet-deep);
 }
 
 .pet-species-sub {
@@ -649,14 +650,21 @@ body {
   text-align: center;
 }
 
+.ring-value {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
 .ring-icon {
   color: var(--coral);
-  margin-bottom: 2px;
+  flex-shrink: 0;
 }
 
 .ring-label strong {
   font-size: 1rem;
   font-weight: 700;
+  line-height: 1;
 }
 
 .steps-hero .ring-label {
@@ -664,7 +672,12 @@ body {
 }
 
 .steps-hero .ring-label strong {
-  font-size: 1.8rem;
+  font-size: 1.55rem;
+}
+
+.steps-hero .ring-icon {
+  width: 18px;
+  height: 18px;
 }
 
 .ring-label span {
@@ -814,10 +827,11 @@ body {
   font-family: "Baloo 2", sans-serif;
   font-weight: 700;
   font-size: 1.2rem;
+  color: var(--coral-deep);
 }
 
 .stats-header h2 svg {
-  color: var(--coral);
+  color: var(--coral-deep);
 }
 
 .stats-close-btn {

@@ -464,6 +464,11 @@ function PetPanel({
   const avgStat = (pet.health + pet.happiness + pet.intellect + pet.strength) / 4;
   const xpMultiplier = statXpMultiplier(avgStat, statCap);
   const decayResistance = RARITY_DECAY_RESISTANCE[pet.rarity];
+  // Progress is tracked in XP internally (steps × current care multiplier), but showing raw
+  // XP here reads as "wrong" — the player counted real steps and got a different number.
+  // Convert back to an estimated step count at the pet's current care level instead.
+  const stepsIntoLevel = Math.round(into / xpMultiplier);
+  const stepsSpanForLevel = Math.round(span / xpMultiplier);
 
   return (
     <div className="panel">
@@ -496,7 +501,7 @@ function PetPanel({
           <div className="stat-fill" style={{ width: `${levelPct}%` }} />
         </div>
         <span className="level-progress-text">
-          {into.toLocaleString("ru-RU")} / {span.toLocaleString("ru-RU")} опыта до след. уровня
+          {stepsIntoLevel.toLocaleString("ru-RU")} / {stepsSpanForLevel.toLocaleString("ru-RU")} шагов до след. уровня
         </span>
       </div>
 

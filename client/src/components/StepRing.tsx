@@ -7,11 +7,12 @@ const CENTER = 50;
 const NOTCH_COUNT = 24;
 
 // Chunky HUD-meter notches around the gauge, like a stamina/mana ring in a mobile game —
-// not a real-world instrument, just a game-y "this is a meter" signal.
+// not a real-world instrument, just a game-y "this is a meter" signal. Kept clear of the
+// ring stroke itself (track spans RADIUS±4) so they never visually fuse with it.
 const NOTCHES = Array.from({ length: NOTCH_COUNT }, (_, i) => {
   const angle = (i / NOTCH_COUNT) * 2 * Math.PI - Math.PI / 2;
-  const r1 = RADIUS + 7;
-  const r2 = RADIUS + 3.5;
+  const r1 = RADIUS + 8;
+  const r2 = RADIUS + 5;
   return {
     key: i,
     x1: CENTER + r1 * Math.cos(angle),
@@ -47,8 +48,10 @@ export default function StepRing({ todaySteps }: { todaySteps: number }) {
         />
       </svg>
       <div className="ring-label">
-        <Footprints size={16} className="ring-icon" />
-        <strong>{todaySteps.toLocaleString("ru-RU")}</strong>
+        <div className="ring-value">
+          <Footprints size={14} className="ring-icon" />
+          <strong>{todaySteps.toLocaleString("ru-RU")}</strong>
+        </div>
         <span>{next ? `до ${next.toLocaleString("ru-RU")}` : "все цели!"}</span>
       </div>
     </div>
