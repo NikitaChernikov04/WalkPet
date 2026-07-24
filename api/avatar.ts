@@ -3,7 +3,7 @@ import { z } from "zod";
 import { completeAvatar, failAvatar, getOrCreatePet, setAvatarPending, upsertUser } from "./_lib/pet-logic.js";
 import { resolveTelegramUser } from "./_lib/telegram.js";
 import { avatarUrlFrom, getAvatarGeneration, startAvatarGeneration } from "./_lib/nanobanana.js";
-import { fetchAndCutoutBackground } from "./_lib/imageProcessing.js";
+import { processAvatarImage } from "./_lib/imageProcessing.js";
 import { buildPetPrompt } from "./_lib/species.js";
 import { evolutionStageForLevel } from "./_lib/leveling.js";
 
@@ -27,23 +27,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: "pet must be hatched before generating an avatar" });
     }
 
+    const seed = pet.avatar_seed ?? Math.floor(Math.random() * 2 ** 31);
     const prompt = buildPetPrompt(pet.species, parsed.data.description, pet.rarity, evolutionStageForLevel(pet.level));
-    const gen = await startAvatarGeneration(prompt);
+    const gen = await startAvatarGeneration(prompt, { seed });
     const url = avatarUrlFrom(gen);
 
     if (gen.status === "completed" && url) {
-      await setAvatarPending(userId, gen.id, parsed.data.description);
+      await setAvatarPending(userId, gen.id, parsed.data.description, seed);
       try {
-        await completeAvatar(userId, await fetchAndCutoutBackground(url));
+        const { display, source } = await processAvatarImage(url);
+        await completeAvatar(userId, display, source);
       } catch {
         await failAvatar(userId);
       }
     } else if (gen.status === "failed" || gen.status === "cancelled") {
-      await setAvatarPending(userId, gen.id, parsed.data.description);
+      await setAvatarPending(userId, gen.id, parsed.data.description, seed);
       await failAvatar(userId);
     } else {
       // pending/processing: client will poll GET /api/avatar for the result.
-      await setAvatarPending(userId, gen.id, parsed.data.description);
+      await setAvatarPending(userId, gen.id, parsed.data.description, seed);
     }
 
     return res.status(200).json({ pet: await getOrCreatePet(userId) });
@@ -56,7 +58,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const gen = await getAvatarGeneration(pet.avatar_generation_id);
         const url = avatarUrlFrom(gen);
         if (gen.status === "completed" && url) {
-          await completeAvatar(userId, await fetchAndCutoutBackground(url));
+          const { display, source } = await processAvatarImage(url);
+          await completeAvatar(userId, display, source);
           pet = await getOrCreatePet(userId);
         } else if (gen.status === "failed" || gen.status === "cancelled") {
           await failAvatar(userId);

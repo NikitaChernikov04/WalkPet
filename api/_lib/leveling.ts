@@ -50,12 +50,32 @@ export const EVOLUTION_STAGE_LABELS: Record<EvolutionStage, string> = {
   ascended: "Вознёсшийся",
 };
 
-// Layered onto the AI art prompt so a pet actually looks more powerful as it evolves, the
-// same way RARITY_PROMPT_MODIFIERS makes rarer pets look fancier (see species.ts).
-export const EVOLUTION_PROMPT_MODIFIERS: Record<EvolutionStage, string> = {
+// Body/proportion changes per stage — layered onto the AI art prompt the same way
+// RARITY_PROMPT_MODIFIERS makes rarer pets look fancier (see species.ts).
+export const EVOLUTION_BODY_PROMPT: Record<EvolutionStage, string> = {
   baby: "Small, young, extra-cute baby proportions with a big head and tiny round body.",
   adult: "Fully grown, confident stance, well-defined proportions and features.",
-  elder: "Powerful battle-hardened veteran look, larger and more imposing, with visible scars or battle-worn detail, richer fur/scale texture.",
+  elder: "Powerful battle-hardened veteran build, larger and more imposing, with a richer fur/scale texture.",
+  ascended: "Awe-inspiring ascended form with a subtle magical aura glowing softly around it.",
+};
+
+// Full cumulative outfit description, for a FROM-SCRATCH generation (hatch, or regenerating
+// after a failure) — each stage restates everything it should be wearing by that point.
+export const EVOLUTION_OUTFIT_PROMPT: Record<EvolutionStage, string> = {
+  baby: "Completely bare and unclothed — no clothing, no accessories, no items worn, just its natural body, fur/scales/feathers and colors.",
+  adult: "Wearing exactly one simple item of clothing or gear, such as a bandana, a scarf, or a small collar.",
+  elder: "Wearing a more elaborate outfit than a simple accessory — light armor pieces, a cloak, or a warrior's hat — plus one extra accessory.",
+  ascended: "Wearing an ornate, majestic full outfit — golden armor, a flowing cape, and a crown or a glowing halo.",
+};
+
+// Only the NEW addition since the previous stage — used for image-to-image evolution edits,
+// where the existing look (including gear already added) comes from the reference image
+// itself and must not be redescribed or it risks being replaced instead of built upon.
+export const EVOLUTION_GEAR_DELTA_PROMPT: Partial<Record<EvolutionStage, string>> = {
+  adult:
+    "Add exactly one simple item of clothing or gear onto the character — such as a bandana, a scarf, or a small collar — fitted naturally. Do not change the character's face, body shape, colors, pose, or the background.",
+  elder:
+    "Add a more elaborate outfit on top of what it's already wearing — light armor pieces, a cloak, or a warrior's hat — plus one extra accessory. Do not change the character's face, body shape, colors, pose, or the background.",
   ascended:
-    "Awe-inspiring ascended master form, glowing power aura radiating off the body, intricate legendary-grade detail, crown-like or majestic markings showing true mastery.",
+    "Add an ornate, majestic full outfit on top of what it's already wearing — golden armor, a flowing cape, and a crown or glowing halo. Do not change the character's face, body shape, colors, pose, or the background.",
 };

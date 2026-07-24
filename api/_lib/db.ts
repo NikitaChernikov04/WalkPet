@@ -18,6 +18,8 @@ const ALTER_STATEMENTS = [
   "ALTER TABLE pets ADD COLUMN rarity TEXT NOT NULL DEFAULT 'common'",
   "ALTER TABLE pets ADD COLUMN level INTEGER NOT NULL DEFAULT 0",
   "ALTER TABLE pets ADD COLUMN name TEXT",
+  "ALTER TABLE pets ADD COLUMN avatar_seed INTEGER",
+  "ALTER TABLE pets ADD COLUMN avatar_source_url TEXT",
 ];
 
 // Serverless cold starts call this on every fresh instance; cheap and idempotent.
@@ -40,6 +42,8 @@ export function ensureSchema(): Promise<void> {
             rarity TEXT NOT NULL DEFAULT 'common',
             level INTEGER NOT NULL DEFAULT 0,
             name TEXT,
+            avatar_seed INTEGER,
+            avatar_source_url TEXT,
             lifetime_steps INTEGER NOT NULL DEFAULT 0,
             health INTEGER NOT NULL DEFAULT 50,
             happiness INTEGER NOT NULL DEFAULT 50,

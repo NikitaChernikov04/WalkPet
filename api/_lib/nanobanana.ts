@@ -24,14 +24,29 @@ export function avatarUrlFrom(gen: MediaGeneration): string | undefined {
   return gen.data?.[0]?.url;
 }
 
+export interface GenerationOptions {
+  // Reference image(s) for image-to-image editing — passing the pet's current avatar here
+  // (with a moderate `strength`) lets an evolution "add clothes" onto the same-looking
+  // creature instead of rolling a completely different-looking image from scratch.
+  images?: string[];
+  strength?: number;
+  // Reused across a pet's generations for extra visual consistency on top of `images`.
+  seed?: number;
+}
+
 // `async: true` is required to get a trackable job id ("gen_...") back. Without it,
 // a generation that doesn't finish within the request returns a plain UUID id that
 // GET /media/{id} can never resolve (always 404s), so polling would be pointless.
-export async function startAvatarGeneration(prompt: string): Promise<MediaGeneration> {
+export async function startAvatarGeneration(prompt: string, options: GenerationOptions = {}): Promise<MediaGeneration> {
+  const input: Record<string, unknown> = { prompt, aspect_ratio: "1:1", quality: "medium" };
+  if (options.images?.length) input.images = options.images;
+  if (options.strength !== undefined) input.strength = options.strength;
+  if (options.seed !== undefined) input.seed = options.seed;
+
   const res = await fetch(`${POLZA_BASE}/media`, {
     method: "POST",
     headers: authHeaders(),
-    body: JSON.stringify({ model: MODEL, input: { prompt, aspect_ratio: "1:1", quality: "medium" }, async: true }),
+    body: JSON.stringify({ model: MODEL, input, async: true }),
   });
   if (!res.ok) throw new Error(`polza /media failed: ${res.status} ${await res.text()}`);
   return res.json() as Promise<MediaGeneration>;

@@ -1,7 +1,7 @@
 import { db, ensureSchema } from "./db.js";
 import { refreshAccessToken } from "./googleFit.js";
 import { startAvatarGeneration } from "./nanobanana.js";
-import { buildPetPrompt, pickRandomSpecies, randomAvatarFlavor, type Rarity } from "./species.js";
+import { buildEvolutionEditPrompt, buildPetPrompt, pickRandomSpecies, type Rarity } from "./species.js";
 import { evolutionStageForLevel, levelForPostHatchSteps, statCapForLevel } from "./leveling.js";
 
 export const EGG_CRACK_STEPS = 3000;
@@ -40,6 +40,8 @@ export interface Pet {
   avatar_status: "none" | "pending" | "completed" | "failed";
   avatar_generation_id: string | null;
   avatar_description: string | null;
+  avatar_seed: number | null;
+  avatar_source_url: string | null;
 }
 
 const clamp = (n: number, max = 100) => Math.max(0, Math.min(max, n));
@@ -196,23 +198,32 @@ export async function recordSteps(userId: number, stepsToday: number): Promise<P
   });
 
   if (justHatched) {
-    // Best-effort: kick off a randomized avatar right away so the reveal feels alive.
+    // Best-effort: kick off the pet's very first avatar right away so the reveal feels alive —
+    // completely bare/unclothed (see EVOLUTION_OUTFIT_PROMPT["baby"]), gear gets earned through
+    // evolution below. A random seed is rolled once here and reused on every future evolution
+    // edit for extra visual consistency on top of the image-to-image reference.
     // If Polza errors out here, avatar_status just stays "none" and the player can still
     // generate one manually from the pet panel.
     try {
-      const description = randomAvatarFlavor();
-      const gen = await startAvatarGeneration(buildPetPrompt(species, description, rarity, evolutionStage));
-      await setAvatarPending(userId, gen.id, description);
+      const seed = Math.floor(Math.random() * 2 ** 31);
+      const gen = await startAvatarGeneration(buildPetPrompt(species, "", rarity, evolutionStage), { seed });
+      await setAvatarPending(userId, gen.id, "", seed);
     } catch {
       // ignore — manual generation remains available
     }
-  } else if (evolved && pet.avatar_status === "completed") {
-    // Crossing an evolution-stage boundary (baby → adult → elder → ascended) re-renders the
-    // same pet with a more powerful look, reusing whatever flavor description it already had.
+  } else if (evolved && pet.avatar_status === "completed" && pet.avatar_source_url) {
+    // Crossing an evolution-stage boundary (baby → adult → elder → ascended) image-to-image
+    // edits the pet's EXISTING avatar (the magenta-background source version, not the
+    // transparent display cutout) to add the next tier of gear, so it stays recognizably the
+    // same creature instead of rolling a completely different-looking image.
     try {
-      const description = pet.avatar_description ?? "";
-      const gen = await startAvatarGeneration(buildPetPrompt(species, description, rarity, evolutionStage));
-      await setAvatarPending(userId, gen.id, description);
+      const prompt = buildEvolutionEditPrompt(species, rarity, evolutionStage);
+      const gen = await startAvatarGeneration(prompt, {
+        images: [pet.avatar_source_url],
+        strength: 0.35,
+        seed: pet.avatar_seed ?? undefined,
+      });
+      await setAvatarPending(userId, gen.id, pet.avatar_description ?? "", pet.avatar_seed ?? undefined);
     } catch {
       // ignore — pet keeps its current art, nothing broken
     }
@@ -256,7 +267,7 @@ export async function restorePetSnapshot(
   await db.execute({
     sql: `UPDATE pets SET stage = ?, species = ?, rarity = ?, level = ?, name = ?, lifetime_steps = ?, health = ?, happiness = ?,
           intellect = ?, strength = ?, streak_days = ?, last_active_date = ?, hatched_at = ?,
-          avatar_url = ?, avatar_status = ?, avatar_generation_id = ?, avatar_description = ?
+          avatar_url = ?, avatar_status = ?, avatar_generation_id = ?, avatar_description = ?, avatar_seed = ?, avatar_source_url = ?
           WHERE user_id = ?`,
     args: [
       snapshot.stage,
@@ -276,6 +287,8 @@ export async function restorePetSnapshot(
       snapshot.avatar_status,
       snapshot.avatar_generation_id,
       snapshot.avatar_description,
+      snapshot.avatar_seed,
+      snapshot.avatar_source_url,
       userId,
     ],
   });
@@ -328,20 +341,33 @@ export async function setPetName(userId: number, name: string): Promise<void> {
   });
 }
 
-export async function setAvatarPending(userId: number, generationId: string, description: string): Promise<void> {
+export async function setAvatarPending(
+  userId: number,
+  generationId: string,
+  description: string,
+  seed?: number,
+): Promise<void> {
   await ensureSchema();
-  await db.execute({
-    sql: `UPDATE pets SET avatar_status = 'pending', avatar_generation_id = ?, avatar_description = ?
-          WHERE user_id = ?`,
-    args: [generationId, description, userId],
-  });
+  if (seed !== undefined) {
+    await db.execute({
+      sql: `UPDATE pets SET avatar_status = 'pending', avatar_generation_id = ?, avatar_description = ?, avatar_seed = ?
+            WHERE user_id = ?`,
+      args: [generationId, description, seed, userId],
+    });
+  } else {
+    await db.execute({
+      sql: `UPDATE pets SET avatar_status = 'pending', avatar_generation_id = ?, avatar_description = ?
+            WHERE user_id = ?`,
+      args: [generationId, description, userId],
+    });
+  }
 }
 
-export async function completeAvatar(userId: number, url: string): Promise<void> {
+export async function completeAvatar(userId: number, displayUrl: string, sourceUrl: string): Promise<void> {
   await ensureSchema();
   await db.execute({
-    sql: "UPDATE pets SET avatar_status = 'completed', avatar_url = ? WHERE user_id = ?",
-    args: [url, userId],
+    sql: "UPDATE pets SET avatar_status = 'completed', avatar_url = ?, avatar_source_url = ? WHERE user_id = ?",
+    args: [displayUrl, sourceUrl, userId],
   });
 }
 

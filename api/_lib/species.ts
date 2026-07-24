@@ -1,4 +1,9 @@
-import { EVOLUTION_PROMPT_MODIFIERS, type EvolutionStage } from "./leveling.js";
+import {
+  EVOLUTION_BODY_PROMPT,
+  EVOLUTION_GEAR_DELTA_PROMPT,
+  EVOLUTION_OUTFIT_PROMPT,
+  type EvolutionStage,
+} from "./leveling.js";
 
 export type Rarity = "common" | "uncommon" | "rare" | "epic" | "legendary";
 
@@ -78,75 +83,17 @@ export function pickRandomSpecies(): { species: string; rarity: Rarity } {
   return { species, rarity };
 }
 
-// A large pool of flavor descriptions layered onto the base species when auto-generating an
-// avatar right at hatch time (the player can still describe their own afterwards).
-const AVATAR_FLAVORS = [
-  "космический исследователь в скафандре",
-  "маленький рыцарь в блестящих доспехах",
-  "диджей в неоновых наушниках",
-  "искатель приключений с картой и биноклем",
-  "супергерой в развевающемся плаще",
-  "путешественник во времени в стимпанк-очках",
-  "пиратский капитан в треуголке",
-  "детектив в плаще со шляпой и лупой",
-  "рок-звезда с электрогитарой",
-  "волшебник в мантии со звёздами",
-  "самурай с катаной и в лёгкой броне",
-  "шеф-повар в белом колпаке с половником",
-  "профессор в твидовом пиджаке и с книгой",
-  "сноубордист в яркой куртке и очках",
-  "диджей-робот с мигающими огоньками",
-  "художник с палитрой и в берете",
-  "садовник в соломенной шляпе с лейкой",
-  "гонщик в шлеме и кожаной куртке",
-  "звёздный ди-джей в блестящем костюме",
-  "исследователь джунглей в хаки-форме",
-  "снежный альпинист с ледорубом и в тёплой куртке",
-  "уличный музыкант с гитарой и в шляпе",
-  "король/королева в маленькой короне и мантии",
-  "инопланетный гость с антеннами и в скафандре",
-  "ниндзя в чёрном облачении с капюшоном",
-  "цирковой акробат в блестящем костюме",
-  "почтальон с сумкой и в форменной кепке",
-  "капитан подводной лодки с биноклем",
-  "фермер в комбинезоне и соломенной шляпе",
-  "зимний олимпиец с медалью на шее",
-  "стимпанк-изобретатель с механическими шестерёнками",
-  "маленький бог грома с молнией в лапе",
-  "воздухоплаватель в корзине воздушного шара",
-  "детский супергерой в маске и с плащом-пелёнкой",
-  "джазовый саксофонист в костюме",
-  "лыжник в горнолыжном костюме и с очками",
-  "археолог со шляпой-федорой и кистью",
-  "весёлый клоун с воздушными шариками",
-  "звездочёт с телескопом и картой созвездий",
-  "рыцарь-дракон в чешуйчатых доспехах",
-  "снежная фея в ледяном наряде",
-  "мультяшный шпион в тёмных очках и плаще",
-  "мастер боевых искусств в кимоно с чёрным поясом",
-  "путешественник по пустыне в бедуинском наряде",
-  "капитан космического корабля с лазерным бластером",
-  "маленький пекарь с испачканным мукой фартуком",
-  "летний сёрфер с доской и в гавайской рубашке",
-  "рождественский эльф в колпаке с бубенчиком",
-  "рыцарь света с сияющим щитом",
-  "хипстер в очках и с чашкой кофе",
-  "викинг в рогатом шлеме и с топором",
-];
-
-export function randomAvatarFlavor(): string {
-  return AVATAR_FLAVORS[Math.floor(Math.random() * AVATAR_FLAVORS.length)];
-}
-
 // Visual embellishment that scales with rarity so higher-tier pets actually *look* more
-// special in the generated artwork, not just in a text label.
+// special in the generated artwork, not just in a text label. Deliberately body/color effects
+// only (glow, particles, saturation) — never clothing or worn items, since those are earned
+// through leveling (see EVOLUTION_OUTFIT_PROMPT), not rolled at birth via rarity.
 const RARITY_PROMPT_MODIFIERS: Record<Rarity, string> = {
   common: "Simple, friendly, approachable design.",
-  uncommon: "Slightly richer colors and one small unique accessory.",
-  rare: "Vivid saturated colors, a subtle magical glow around the character, an eye-catching accessory.",
-  epic: "Radiant magical aura, glowing particles floating around it, ornate fantasy-style accessories and markings.",
+  uncommon: "Slightly richer, more saturated colors.",
+  rare: "Vivid saturated colors and a subtle magical glow around the character's body.",
+  epic: "Radiant magical aura and glowing particles floating around its body.",
   legendary:
-    "Majestic legendary presence, shimmering ethereal aura, intricate ornate details, glowing runes or star-like sparkles, a crown or majestic markings, awe-inspiring god-tier design.",
+    "Majestic legendary presence, shimmering ethereal aura around its body, glowing runes or star-like sparkles in the air around it, awe-inspiring god-tier design.",
 };
 
 export function buildPetPrompt(
@@ -155,15 +102,33 @@ export function buildPetPrompt(
   rarity: Rarity,
   evolutionStage: EvolutionStage = "baby",
 ): string {
-  const flavorSentence = userDescription.trim() ? `Player's custom flavor: ${userDescription}. ` : "";
+  const hasCustomFlavor = userDescription.trim().length > 0;
+  const flavorSentence = hasCustomFlavor ? `Player's custom flavor: ${userDescription}. ` : "";
+  // The default per-stage outfit (e.g. "completely bare" for a baby) only applies when the
+  // player hasn't described their own look — an explicit custom flavor always wins instead of
+  // fighting it (e.g. someone describing "a knight in armor" for their brand-new hatchling).
+  const outfitSentence = hasCustomFlavor ? "" : `${EVOLUTION_OUTFIT_PROMPT[evolutionStage]} `;
   return (
     `Cute stylized mobile-game pet character, ${species}, full body visible from head to feet, ` +
     `either standing upright on two legs like a game mascot or posed naturally on all four legs like ` +
     `a real animal — pick whichever suits the description best. Dynamic walking pose, flat illustration ` +
     `style, vibrant colors, centered composition. Rarity tier: ${rarity}. ${RARITY_PROMPT_MODIFIERS[rarity]} ` +
-    `Evolution stage: ${evolutionStage}. ${EVOLUTION_PROMPT_MODIFIERS[evolutionStage]} ` +
+    `${EVOLUTION_BODY_PROMPT[evolutionStage]} ${outfitSentence}` +
     `Background: solid flat single-color chroma-key screen, pure uniform magenta color rgb(255,0,255), ` +
     `no gradient, no pattern, no texture, no shadow, no other colors anywhere in the background. ` +
     `${flavorSentence}No text, no watermark.`
+  );
+}
+
+// Image-to-image edit prompt for an evolution level-up: describes ONLY the new clothing/gear
+// to add on top of the pet's current (reference) image, explicitly preserving everything else
+// so the same-looking creature just gets progressively more dressed up as it levels.
+export function buildEvolutionEditPrompt(species: string, rarity: Rarity, evolutionStage: EvolutionStage): string {
+  const gearDelta = EVOLUTION_GEAR_DELTA_PROMPT[evolutionStage];
+  return (
+    `This is the same ${species} pet character (rarity: ${rarity}) shown in the reference image — ` +
+    `keep it recognizably the same creature. ${gearDelta ?? ""} Keep the exact same solid magenta ` +
+    `chroma-key background (rgb(255,0,255)), the same flat illustration art style, and the same ` +
+    `centered composition. No text, no watermark.`
   );
 }

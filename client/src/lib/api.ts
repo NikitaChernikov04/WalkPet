@@ -21,6 +21,8 @@ export interface Pet {
   avatar_status: "none" | "pending" | "completed" | "failed";
   avatar_generation_id: string | null;
   avatar_description: string | null;
+  avatar_seed: number | null;
+  avatar_source_url: string | null;
 }
 
 export interface PetState {

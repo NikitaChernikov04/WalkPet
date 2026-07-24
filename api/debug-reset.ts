@@ -24,6 +24,8 @@ const petSnapshotSchema = z.object({
   avatar_status: z.enum(["none", "pending", "completed", "failed"]),
   avatar_generation_id: z.string().nullable(),
   avatar_description: z.string().nullable(),
+  avatar_seed: z.number().nullable(),
+  avatar_source_url: z.string().nullable(),
 });
 const bodySchema = z.object({ pet: petSnapshotSchema, todaySteps: z.number().int().min(0) });
 

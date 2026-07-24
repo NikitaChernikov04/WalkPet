@@ -114,16 +114,27 @@ function boxDownsample(png: PNG, maxDimension: number): PNG {
   return out;
 }
 
-/** Fetches a generated (chroma-key background) image and returns it as a transparent-PNG
- *  data URL, ready to store directly in `pets.avatar_url`. */
-export async function fetchAndCutoutBackground(imageUrl: string): Promise<string> {
+function toDataUrl(png: PNG): string {
+  return `data:image/png;base64,${PNG.sync.write(png).toString("base64")}`;
+}
+
+/** Fetches a freshly generated (chroma-key background) image once and returns two versions:
+ *  `display` — transparent-PNG cutout, ready for `pets.avatar_url` (what the player sees).
+ *  `source` — the same image resized but with its original solid magenta background intact,
+ *  ready for `pets.avatar_source_url`. Polza's own generated-image URLs are short-lived, so
+ *  this is what gets fed back in as the image-to-image reference on a later evolution edit —
+ *  the transparent `display` version would confuse the model (and break the next cutout),
+ *  since it no longer has the clean chroma-key background the prompt asks for. */
+export async function processAvatarImage(imageUrl: string): Promise<{ display: string; source: string }> {
   const res = await fetch(imageUrl);
   if (!res.ok) throw new Error(`failed to fetch generated image: ${res.status} ${imageUrl}`);
   const buf = Buffer.from(await res.arrayBuffer());
 
-  const png = PNG.sync.read(buf);
-  cutoutChromaKey(png);
-  const resized = boxDownsample(png, MAX_DIMENSION);
-  const out = PNG.sync.write(resized);
-  return `data:image/png;base64,${out.toString("base64")}`;
+  const source = boxDownsample(PNG.sync.read(buf), MAX_DIMENSION);
+
+  const cutout = PNG.sync.read(buf);
+  cutoutChromaKey(cutout);
+  const display = boxDownsample(cutout, MAX_DIMENSION);
+
+  return { display: toDataUrl(display), source: toDataUrl(source) };
 }
