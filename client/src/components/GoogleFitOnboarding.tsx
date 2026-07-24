@@ -24,7 +24,7 @@ export default function GoogleFitOnboarding({
         <Activity size={32} className="modal-icon" />
         <h2>Подключи Google Fit</h2>
         <p>
-          Питомец растёт от твоих реальных шагов. Чтобы яйцо начало отслеживать шаги, подключи
+          Питомец растёт от твоих реальных шагов. Чтобы шаги начали засчитываться, подключи
           Google Fit — это займёт полминуты.
         </p>
         <button type="button" className="modal-primary-btn" onClick={onConnect}>

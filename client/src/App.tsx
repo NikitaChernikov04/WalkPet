@@ -184,12 +184,11 @@ export default function App() {
     return () => clearInterval(interval);
   }, [googleFitConnected]);
 
-  // First-run nudge: a brand-new egg (no steps yet) with no Google Fit connection means step
-  // tracking can't do anything yet, so prompt to connect right away instead of leaving the
-  // player staring at a stuck egg. Shown once per device via localStorage.
+  // First-run nudge: any account with no Google Fit connection can't get real step data at
+  // all, so prompt to connect right away instead of leaving the player wondering why nothing
+  // moves. Shown once per device via localStorage.
   useEffect(() => {
-    if (!pet || googleFitConnected === null) return;
-    if (pet.stage !== "egg" || pet.lifetime_steps > 0 || googleFitConnected) return;
+    if (!pet || googleFitConnected === null || googleFitConnected) return;
     if (localStorage.getItem(ONBOARDING_SEEN_KEY)) return;
     setShowOnboarding(true);
   }, [pet, googleFitConnected]);
