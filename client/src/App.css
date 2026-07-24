@@ -1,37 +1,37 @@
 /* ============================================================
-   WalkPet — "Field Journal" design system
-   A pet grown from real walking, kept like a specimen logged in
-   an explorer's field journal: dark ink canvas, parchment plates,
-   brass instruments, a compass for the walk itself.
+   WalkPet — "Arcade Companion" design system
+   A collectible pet powered by real steps: bold color-blocked
+   cards, chunky press-button feedback, gem-tier rarity, a HUD
+   gauge for the day's walk. Modern mobile-game energy.
    ============================================================ */
 
 :root {
-  --ink: #15130f;
-  --ink-soft: #1d1911;
-  --dusk: #423a5e;
-  --dusk-deep: #241c3a;
+  --canvas: #1b1b4e;
+  --canvas-deep: #101036;
+  --canvas-glow: #34348c;
 
-  --parchment: #ede1c4;
-  --parchment-dim: #e1d3ac;
-  --parchment-ink: #2b2013;
+  --card: #ffffff;
+  --card-tint: #f3f1ff;
+  --ink: #1b1b3a;
+  /* Solid, not alpha — on a light card, a translucent ink fades TOWARD the light
+     background as opacity drops, which cuts contrast rather than easing it. */
+  --ink-soft: #4a5164;
+  --ink-faint: #6b7284;
 
-  --brass: #c99a44;
-  --brass-bright: #e0b25c;
-  /* Brass reads well on the dark ink canvas (~7:1) but is too close in value to
-     parchment (~2:1) to use as text/icon color there — bronze is the same "metal
-     instrument" accent, darkened enough to stay legible on parchment surfaces. */
-  --bronze: #6b4a17;
-  --moss: #6b8f5d;
-  --moss-bright: #86ac76;
-  --rust: #b8532e;
-  --rust-bright: #d06a41;
-  --silver: #a9b4be;
-  --amethyst: #8b5fbf;
+  --lime: #b6ff3d;
+  --lime-deep: #7fc71f;
+  --coral: #ff5c7a;
+  --coral-deep: #e8405f;
+  --gold: #ffc94a;
+  --gold-deep: #ee9f12;
+  --sky: #4cc2ff;
+  --sky-deep: #1c9fe0;
+  --violet: #9b6bff;
+  --violet-deep: #7b46ea;
+  --grey: #9ba3b4;
+  --grey-deep: #7c8494;
 
-  --line: rgba(237, 225, 196, 0.16);
-  --line-strong: rgba(237, 225, 196, 0.32);
-  --line-ink: rgba(43, 32, 19, 0.22);
-  --line-ink-soft: rgba(43, 32, 19, 0.12);
+  --line: rgba(27, 27, 58, 0.14);
 }
 
 * {
@@ -40,9 +40,10 @@
 
 body {
   margin: 0;
-  background: radial-gradient(ellipse 900px 640px at 50% -14%, var(--dusk) 0%, var(--ink) 55%);
-  color: var(--parchment);
-  font-family: "Karla", sans-serif;
+  background: radial-gradient(ellipse 900px 680px at 50% -12%, var(--canvas-glow) 0%, var(--canvas) 60%);
+  background-attachment: fixed;
+  color: var(--card);
+  font-family: "Manrope", sans-serif;
 }
 
 .app-shell {
@@ -56,13 +57,12 @@ body {
 .app-shell.error {
   text-align: center;
   padding-top: 40vh;
-  font-family: "Space Mono", monospace;
-  font-size: 0.85rem;
-  letter-spacing: 0.02em;
+  font-family: "Space Grotesk", monospace;
+  font-size: 0.9rem;
 }
 
 .app-shell.error {
-  color: var(--rust-bright);
+  color: var(--coral);
 }
 
 /* --- Header --- */
@@ -76,29 +76,29 @@ body {
 
 .app-eyebrow {
   display: block;
-  font-family: "Space Mono", monospace;
-  font-size: 0.62rem;
-  letter-spacing: 0.16em;
+  font-family: "Space Grotesk", monospace;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--brass);
-  opacity: 0.85;
-  margin: 0 0 3px;
+  color: var(--lime);
+  margin: 0 0 2px;
 }
 
 .app-header h1 {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-family: "Fraunces", serif;
-  font-weight: 600;
-  font-size: 1.5rem;
-  letter-spacing: 0.01em;
+  font-family: "Baloo 2", sans-serif;
+  font-weight: 800;
+  font-size: 1.6rem;
+  letter-spacing: 0.005em;
   margin: 0;
-  color: var(--parchment);
+  color: #ffffff;
 }
 
 .app-header h1 svg {
-  color: var(--brass);
+  color: var(--gold);
 }
 
 .header-actions {
@@ -108,33 +108,34 @@ body {
 }
 
 .stats-toggle-btn {
-  background: transparent;
-  border: 1px solid var(--line-strong);
-  color: var(--parchment);
+  background: rgba(255, 255, 255, 0.08);
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  color: #ffffff;
   padding: 7px;
   margin: 0;
   display: flex;
   align-items: center;
-  border-radius: 3px;
+  border-radius: 12px;
+  box-shadow: none;
 }
 
 .stats-toggle-btn:hover {
-  border-color: var(--brass);
-  color: var(--brass-bright);
-  background: transparent;
+  border-color: var(--lime);
+  color: var(--lime);
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .streak-pill {
   display: flex;
   align-items: center;
   gap: 4px;
-  background: rgba(201, 154, 68, 0.14);
-  border: 1px solid rgba(201, 154, 68, 0.4);
-  color: var(--brass-bright);
+  background: var(--gold);
+  border: 2px solid var(--ink);
+  color: var(--ink);
   padding: 5px 10px;
-  border-radius: 3px;
-  font-family: "Space Mono", monospace;
-  font-size: 0.8rem;
+  border-radius: 999px;
+  font-family: "Space Grotesk", monospace;
+  font-size: 0.82rem;
   font-weight: 700;
 }
 
@@ -148,73 +149,58 @@ body {
   gap: 6px;
   width: 100%;
   margin: 0 0 12px;
-  font-family: "Space Mono", monospace;
-  font-size: 0.74rem;
-  letter-spacing: 0.03em;
+  font-family: "Manrope", sans-serif;
+  font-size: 0.8rem;
+  font-weight: 700;
 }
 
 .google-fit-connect-btn {
-  background: transparent;
-  border: 1px dashed var(--line-strong);
-  color: var(--parchment);
-  padding: 9px 14px;
-  border-radius: 3px;
+  background: var(--sky);
+  color: var(--ink);
+  padding: 10px 14px;
+  border-radius: 14px;
 }
 
 .google-fit-connect-btn:hover {
-  border-color: var(--brass);
-  border-style: solid;
-  color: var(--brass-bright);
-  background: transparent;
+  background: var(--sky-deep);
 }
 
 .google-fit-status {
-  color: var(--moss-bright);
-  opacity: 0.9;
-  text-transform: uppercase;
+  color: var(--lime);
 }
 
-/* --- Plate (the parchment card) --- */
+/* --- Card (game panel) --- */
 
 .panel {
-  background: linear-gradient(180deg, var(--parchment) 0%, var(--parchment-dim) 100%);
-  color: var(--parchment-ink);
-  border-radius: 5px;
-  padding: 18px 16px 18px;
-  margin: 14px 0;
+  background: var(--card);
+  color: var(--ink);
+  border: 3px solid var(--ink);
+  border-radius: 22px;
+  padding: 18px 16px;
+  margin: 16px 0;
   text-align: center;
   position: relative;
-  box-shadow: 0 16px 32px -14px rgba(0, 0, 0, 0.6);
-}
-
-.panel::before {
-  content: "";
-  position: absolute;
-  inset: 6px;
-  border: 1px solid var(--line-ink);
-  border-radius: 3px;
-  pointer-events: none;
+  box-shadow: 6px 6px 0 rgba(16, 16, 54, 0.9);
 }
 
 .panel h2 {
-  font-family: "Fraunces", serif;
-  font-style: italic;
-  font-weight: 500;
-  font-size: 1.55rem;
+  font-family: "Baloo 2", sans-serif;
+  font-weight: 700;
+  font-size: 1.6rem;
   margin: 10px 0 0;
-  letter-spacing: 0.005em;
 }
 
 .pet-species-sub {
   margin: 1px 0 10px;
-  font-family: "Space Mono", monospace;
-  font-size: 0.66rem;
-  letter-spacing: 0.1em;
+  font-family: "Space Grotesk", monospace;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  opacity: 0.55;
+  color: var(--ink-soft);
 }
 
-/* --- Level / evolution --- */
+/* --- Level / evolution: chunky XP bar --- */
 
 .level-block {
   margin: 2px 0 16px;
@@ -222,11 +208,11 @@ body {
 }
 
 .level-label {
-  font-family: "Space Mono", monospace;
-  font-size: 0.66rem;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  opacity: 0.7;
+  font-family: "Space Grotesk", monospace;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--ink-soft);
   display: block;
   margin-bottom: 7px;
 }
@@ -236,9 +222,10 @@ body {
 }
 
 .level-progress-text {
-  font-family: "Space Mono", monospace;
-  font-size: 0.66rem;
-  opacity: 0.55;
+  font-family: "Space Grotesk", monospace;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--ink-faint);
   display: block;
   text-align: right;
 }
@@ -249,20 +236,21 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  background: transparent;
-  border: 1px solid var(--line-ink);
-  color: var(--parchment-ink);
-  font-family: "Space Mono", monospace;
-  font-size: 0.72rem;
+  background: var(--card-tint);
+  border: 2px solid var(--ink);
+  color: var(--ink);
+  font-family: "Manrope", sans-serif;
+  font-weight: 700;
+  font-size: 0.75rem;
   padding: 6px 12px;
   margin: 0 0 12px;
-  border-radius: 3px;
+  border-radius: 12px;
+  box-shadow: 0 2px 0 var(--ink);
 }
 
 .name-editor-toggle:hover {
-  border-color: var(--rust);
-  color: var(--rust);
-  background: transparent;
+  background: var(--card-tint);
+  color: var(--coral-deep);
 }
 
 .name-editor {
@@ -277,7 +265,13 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 0.78rem;
+  font-size: 0.8rem;
+  background: var(--violet);
+  color: var(--ink);
+}
+
+.name-editor-ai-btn:hover {
+  background: var(--violet-deep);
 }
 
 .name-editor-custom {
@@ -286,122 +280,112 @@ body {
 }
 
 .name-editor-custom input {
-  font-family: "Karla", sans-serif;
+  font-family: "Manrope", sans-serif;
   font-size: 0.85rem;
   padding: 8px 10px;
-  border-radius: 3px;
-  border: 1px solid var(--line-ink);
-  background: rgba(255, 255, 255, 0.4);
-  color: var(--parchment-ink);
+  border-radius: 12px;
+  border: 2px solid var(--ink);
+  background: var(--card-tint);
+  color: var(--ink);
   width: 140px;
 }
 
 .name-editor-custom input::placeholder {
-  color: rgba(43, 32, 19, 0.45);
+  color: var(--ink-faint);
 }
 
 .name-editor-custom button {
-  font-size: 0.78rem;
+  font-size: 0.8rem;
   padding: 8px 12px;
 }
 
 .name-editor-cancel {
   background: transparent;
-  color: var(--parchment-ink);
-  font-family: "Space Mono", monospace;
-  font-size: 0.7rem;
-  opacity: 0.55;
+  color: var(--ink-soft);
+  font-family: "Manrope", sans-serif;
+  font-weight: 700;
+  font-size: 0.72rem;
   padding: 2px 8px;
   margin: 0;
+  box-shadow: none;
+  border: none;
 }
 
 .name-editor-cancel:hover {
   background: transparent;
-  opacity: 1;
-  color: var(--rust);
+  color: var(--coral-deep);
+  box-shadow: none;
 }
 
-/* --- Rarity: wax seal --- */
+/* --- Rarity: gem-tier chip --- */
 
 .rarity-badge {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  font-family: "Space Mono", monospace;
-  font-size: 0.66rem;
+  font-family: "Space Grotesk", monospace;
+  font-size: 0.68rem;
   font-weight: 700;
-  letter-spacing: 0.08em;
-  padding: 4px 12px 4px 5px;
+  letter-spacing: 0.06em;
+  padding: 4px 12px;
   border-radius: 999px;
   margin: 0 0 12px;
   text-transform: uppercase;
-  background: rgba(43, 32, 19, 0.07);
-  color: var(--parchment-ink);
+  border: 2px solid var(--ink);
+  color: var(--ink);
 }
 
-.rarity-badge::before {
-  content: "";
-  width: 15px;
-  height: 15px;
-  border-radius: 50%;
-  flex-shrink: 0;
-  box-shadow:
-    inset 0 2px 2px rgba(255, 255, 255, 0.4),
-    inset 0 -2px 3px rgba(0, 0, 0, 0.35),
-    0 1px 2px rgba(0, 0, 0, 0.3);
+.rarity-common {
+  background: var(--grey);
 }
 
-.rarity-common::before {
-  background: radial-gradient(circle at 35% 30%, #b6b0a2, #8b8577 72%);
+.rarity-uncommon {
+  background: var(--lime);
 }
 
-.rarity-uncommon::before {
-  background: radial-gradient(circle at 35% 30%, #93b884, var(--moss) 72%);
+.rarity-rare {
+  background: var(--sky);
 }
 
-.rarity-rare::before {
-  background: radial-gradient(circle at 35% 30%, #d3dbe1, var(--silver) 72%);
-}
-
-.rarity-epic::before {
-  background: radial-gradient(circle at 35% 30%, #b489e6, var(--amethyst) 72%);
+.rarity-epic {
+  background: var(--violet);
 }
 
 .rarity-legendary {
-  background: rgba(201, 154, 68, 0.16);
+  color: var(--ink);
+  background: linear-gradient(100deg, var(--gold) 0%, #fff2c9 25%, var(--gold) 50%, #fff2c9 75%, var(--gold) 100%);
+  background-size: 240% 100%;
+  animation: shimmer 3.5s linear infinite;
 }
 
-.rarity-legendary::before {
-  background: radial-gradient(circle at 35% 30%, #f3d488, var(--brass) 72%);
+@keyframes shimmer {
+  to { background-position: -240% 0; }
 }
 
 .rarity-effect {
   margin: -6px 0 12px;
-  font-family: "Space Mono", monospace;
-  font-size: 0.62rem;
-  letter-spacing: 0.02em;
-  opacity: 0.5;
+  font-family: "Space Grotesk", monospace;
+  font-size: 0.64rem;
+  font-weight: 600;
+  color: var(--ink-faint);
 }
 
-/* --- Scene (pet / egg stage) --- */
+/* --- Scene (pet / egg stage): dark HUD panel --- */
 
 .scene-frame {
   display: flex;
   align-items: stretch;
   gap: 8px;
-  padding: 8px;
-  position: relative;
-  background:
-    linear-gradient(to right, var(--brass) 2px, transparent 2px) top left / 18px 2px no-repeat,
-    linear-gradient(to bottom, var(--brass) 2px, transparent 2px) top left / 2px 18px no-repeat,
-    linear-gradient(to left, var(--brass) 2px, transparent 2px) top right / 18px 2px no-repeat,
-    linear-gradient(to bottom, var(--brass) 2px, transparent 2px) top right / 2px 18px no-repeat,
-    linear-gradient(to right, var(--brass) 2px, transparent 2px) bottom left / 18px 2px no-repeat,
-    linear-gradient(to top, var(--brass) 2px, transparent 2px) bottom left / 2px 18px no-repeat,
-    linear-gradient(to left, var(--brass) 2px, transparent 2px) bottom right / 18px 2px no-repeat,
-    linear-gradient(to top, var(--brass) 2px, transparent 2px) bottom right / 2px 18px no-repeat;
-  opacity: 0.98;
+  padding: 9px;
+  border-radius: 18px;
+  background: var(--canvas-deep);
+  border: 3px solid var(--ink);
 }
+
+.scene-frame.rarity-common { border-color: var(--grey-deep); }
+.scene-frame.rarity-uncommon { border-color: var(--lime-deep); }
+.scene-frame.rarity-rare { border-color: var(--sky-deep); }
+.scene-frame.rarity-epic { border-color: var(--violet-deep); }
+.scene-frame.rarity-legendary { border-color: var(--gold-deep); }
 
 .scene-frame .scene {
   flex: 1;
@@ -411,8 +395,8 @@ body {
 .scene {
   position: relative;
   height: 246px;
-  border-radius: 3px;
-  background: linear-gradient(180deg, var(--dusk) 0%, var(--dusk-deep) 55%, var(--ink) 100%);
+  border-radius: 12px;
+  background: linear-gradient(160deg, var(--violet) 0%, #4b2fa3 55%, var(--canvas-deep) 100%);
   overflow: hidden;
   cursor: pointer;
   user-select: none;
@@ -421,8 +405,8 @@ body {
 .clouds {
   position: absolute;
   inset: 0;
-  background-image: radial-gradient(rgba(237, 225, 196, 0.07) 18%, transparent 20%),
-    radial-gradient(rgba(237, 225, 196, 0.05) 14%, transparent 16%);
+  background-image: radial-gradient(rgba(255, 255, 255, 0.1) 18%, transparent 20%),
+    radial-gradient(rgba(255, 255, 255, 0.07) 14%, transparent 16%);
   background-size: 120px 80px, 90px 60px;
   background-position: 10% 20%, 70% 45%;
 }
@@ -433,8 +417,8 @@ body {
   left: 0;
   right: 0;
   height: 28px;
-  background: rgba(201, 154, 68, 0.08);
-  border-top: 1px solid rgba(201, 154, 68, 0.25);
+  background: rgba(0, 0, 0, 0.22);
+  border-top: 2px solid rgba(255, 255, 255, 0.15);
 }
 
 .pet-sprite {
@@ -465,7 +449,7 @@ body {
 
 .particle {
   position: absolute;
-  color: var(--brass-bright);
+  color: var(--gold);
   pointer-events: none;
   animation: floatUp 0.9s ease-out forwards;
 }
@@ -478,7 +462,7 @@ body {
 .footprint {
   position: absolute;
   bottom: 8px;
-  color: rgba(237, 225, 196, 0.4);
+  color: rgba(255, 255, 255, 0.55);
   animation: fadeOut 1.2s ease-out forwards;
 }
 
@@ -491,11 +475,12 @@ body {
   position: absolute;
   top: 8px;
   right: 12px;
-  font-family: "Space Mono", monospace;
+  font-family: "Space Grotesk", monospace;
   font-size: 0.62rem;
-  letter-spacing: 0.04em;
-  color: var(--parchment);
-  opacity: 0.35;
+  font-weight: 700;
+  color: #ffffff;
+  opacity: 0.8;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
 }
 
 /* --- Egg --- */
@@ -520,19 +505,20 @@ body {
 
 .egg-caption {
   margin: 14px 0 6px;
-  font-family: "Fraunces", serif;
-  font-style: italic;
-  font-size: 1.02rem;
+  font-family: "Baloo 2", sans-serif;
+  font-weight: 600;
+  font-size: 1.1rem;
 }
 
 .egg-progress {
-  font-family: "Space Mono", monospace;
-  font-size: 0.72rem;
-  opacity: 0.6;
+  font-family: "Space Grotesk", monospace;
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--ink-soft);
   margin: 8px 0 14px;
 }
 
-/* --- Side stat rail --- */
+/* --- Side stat rail (bright icons on the dark HUD panel) --- */
 
 .stats-rail {
   flex-shrink: 0;
@@ -550,20 +536,20 @@ body {
   flex-direction: column;
   align-items: center;
   gap: 4px;
-  font-family: "Space Mono", monospace;
+  font-family: "Space Grotesk", monospace;
   font-size: 0.6rem;
-  color: var(--parchment-ink);
-  opacity: 0.85;
+  font-weight: 700;
+  color: #ffffff;
 }
 
 .stat-chip svg {
-  color: var(--bronze);
+  color: var(--gold);
 }
 
 .stat-chip-track {
-  width: 5px;
+  width: 6px;
   height: 44px;
-  background: rgba(43, 32, 19, 0.13);
+  background: rgba(255, 255, 255, 0.15);
   border-radius: 999px;
   display: flex;
   align-items: flex-end;
@@ -572,24 +558,25 @@ body {
 
 .stat-chip-fill {
   width: 100%;
-  background: linear-gradient(180deg, var(--bronze), var(--rust));
+  background: linear-gradient(180deg, var(--lime), var(--coral));
   border-radius: 999px;
   transition: height 0.5s ease;
 }
 
-/* --- Generic track/fill (egg progress, level trail) --- */
+/* --- Generic track/fill (egg progress, level XP bar) --- */
 
 .stat-track {
-  height: 2px;
-  background-image: repeating-linear-gradient(90deg, var(--line-ink) 0 5px, transparent 5px 10px);
-  border-radius: 0;
-  overflow: visible;
+  height: 14px;
+  background: var(--card-tint);
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  overflow: hidden;
   position: relative;
 }
 
 .stat-fill {
   height: 100%;
-  background-image: repeating-linear-gradient(90deg, var(--bronze) 0 5px, transparent 5px 10px);
+  background: linear-gradient(180deg, var(--lime) 0%, var(--lime-deep) 100%);
   transition: width 0.5s ease;
   position: relative;
 }
@@ -597,21 +584,13 @@ body {
 .stat-fill::after {
   content: "";
   position: absolute;
-  right: -4px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  background: var(--bronze);
-  box-shadow: 0 0 0 3px rgba(107, 74, 23, 0.25);
+  inset: 1px 1px auto 1px;
+  height: 35%;
+  background: rgba(255, 255, 255, 0.5);
+  border-radius: 999px;
 }
 
-.panel > .stat-track {
-  height: 3px;
-}
-
-/* --- Compass step ring --- */
+/* --- HUD step gauge --- */
 
 .steps-hero {
   display: flex;
@@ -627,43 +606,32 @@ body {
 }
 
 .steps-hero .step-ring {
-  width: 172px;
-  height: 172px;
+  width: 176px;
+  height: 176px;
 }
 
 .step-ring svg {
   width: 100%;
   height: 100%;
   overflow: visible;
-  filter: drop-shadow(0 5px 10px rgba(43, 32, 19, 0.35));
 }
 
-.compass-face {
-  fill: #f6ecd6;
-  stroke: var(--line-ink);
-  stroke-width: 0.6;
-}
-
-.compass-tick {
-  stroke: var(--parchment-ink);
-}
-
-.compass-dir {
-  font-family: "Space Mono", monospace;
-  fill: var(--bronze);
-  font-weight: 700;
+.gauge-notch {
+  stroke: var(--ink-faint);
+  stroke-width: 1.6;
+  stroke-linecap: round;
 }
 
 .ring-track {
-  fill: none;
-  stroke: var(--line-ink);
-  stroke-width: 3;
+  fill: var(--card-tint);
+  stroke: var(--ink);
+  stroke-width: 8;
 }
 
 .ring-progress {
   fill: none;
-  stroke: var(--bronze);
-  stroke-width: 3;
+  stroke: var(--lime);
+  stroke-width: 8;
   stroke-linecap: round;
   transition: stroke-dashoffset 0.5s ease;
 }
@@ -675,10 +643,15 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  font-family: "Space Mono", monospace;
-  color: var(--parchment-ink);
+  font-family: "Space Grotesk", monospace;
+  color: var(--ink);
   font-size: 0.7rem;
   text-align: center;
+}
+
+.ring-icon {
+  color: var(--coral);
+  margin-bottom: 2px;
 }
 
 .ring-label strong {
@@ -691,11 +664,12 @@ body {
 }
 
 .steps-hero .ring-label strong {
-  font-size: 1.7rem;
+  font-size: 1.8rem;
 }
 
 .ring-label span {
-  opacity: 0.6;
+  font-weight: 600;
+  color: var(--ink-soft);
   font-size: 0.6rem;
   letter-spacing: 0.03em;
   text-transform: uppercase;
@@ -707,9 +681,9 @@ body {
 .avatar-gen {
   margin: 4px 0 14px;
   padding: 12px 12px;
-  background: rgba(43, 32, 19, 0.05);
-  border: 1px dashed var(--line-ink);
-  border-radius: 3px;
+  background: var(--card-tint);
+  border: 2px solid var(--ink);
+  border-radius: 16px;
   text-align: left;
 }
 
@@ -717,10 +691,10 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-family: "Space Mono", monospace;
-  font-size: 0.76rem;
-  opacity: 0.8;
-  border-style: solid;
+  font-family: "Manrope", sans-serif;
+  font-weight: 700;
+  font-size: 0.8rem;
+  color: var(--ink-soft);
 }
 
 .spin {
@@ -732,17 +706,19 @@ body {
 }
 
 .avatar-gen-hint {
-  font-family: "Space Mono", monospace;
-  font-size: 0.7rem;
-  opacity: 0.65;
+  font-family: "Manrope", sans-serif;
+  font-weight: 600;
+  font-size: 0.76rem;
+  color: var(--ink-soft);
   margin: 0 0 8px;
   line-height: 1.4;
 }
 
 .avatar-gen-error {
-  font-family: "Space Mono", monospace;
-  font-size: 0.7rem;
-  color: var(--rust);
+  font-family: "Manrope", sans-serif;
+  font-weight: 700;
+  font-size: 0.76rem;
+  color: var(--coral-deep);
   margin: 0 0 8px;
 }
 
@@ -750,18 +726,18 @@ body {
   width: 100%;
   min-height: 54px;
   resize: vertical;
-  border-radius: 3px;
-  border: 1px solid var(--line-ink);
-  background: rgba(255, 255, 255, 0.4);
-  color: var(--parchment-ink);
+  border-radius: 12px;
+  border: 2px solid var(--ink);
+  background: var(--card);
+  color: var(--ink);
   padding: 8px 10px;
-  font-family: "Karla", sans-serif;
+  font-family: "Manrope", sans-serif;
   font-size: 0.85rem;
   box-sizing: border-box;
 }
 
 .avatar-gen textarea::placeholder {
-  color: rgba(43, 32, 19, 0.4);
+  color: var(--ink-faint);
 }
 
 .avatar-gen button {
@@ -776,7 +752,7 @@ body {
   cursor: not-allowed;
 }
 
-/* --- Milestones: log entries --- */
+/* --- Milestones: medal chips --- */
 
 .milestones {
   list-style: none;
@@ -784,9 +760,10 @@ body {
   margin: 14px 0 0;
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 7px;
-  font-family: "Space Mono", monospace;
-  font-size: 0.7rem;
+  gap: 8px;
+  font-family: "Manrope", sans-serif;
+  font-weight: 700;
+  font-size: 0.74rem;
   text-align: left;
 }
 
@@ -794,30 +771,30 @@ body {
   display: flex;
   align-items: center;
   gap: 6px;
-  opacity: 0.5;
-  background: rgba(43, 32, 19, 0.04);
-  border: 1px dashed var(--line-ink);
+  color: var(--ink-faint);
+  background: var(--card-tint);
+  border: 2px solid var(--line);
   padding: 6px 8px;
-  border-radius: 3px;
+  border-radius: 12px;
 }
 
 .milestones li svg {
   flex-shrink: 0;
   border-radius: 50%;
-  padding: 2px;
+  padding: 3px;
   box-sizing: content-box;
+  background: rgba(27, 27, 58, 0.08);
 }
 
 .milestones .done {
-  opacity: 1;
-  color: #3d5233;
-  background: rgba(107, 143, 93, 0.14);
-  border: 1px solid var(--moss);
+  color: var(--ink);
+  background: var(--lime);
+  border: 2px solid var(--ink);
 }
 
 .milestones .done svg {
-  background: var(--moss);
-  color: var(--parchment);
+  background: var(--ink);
+  color: var(--lime);
 }
 
 /* --- Stats screen --- */
@@ -834,31 +811,31 @@ body {
   align-items: center;
   gap: 6px;
   margin: 0;
-  font-family: "Fraunces", serif;
-  font-style: normal;
-  font-weight: 600;
-  font-size: 1.15rem;
+  font-family: "Baloo 2", sans-serif;
+  font-weight: 700;
+  font-size: 1.2rem;
 }
 
 .stats-header h2 svg {
-  color: var(--bronze);
+  color: var(--coral);
 }
 
 .stats-close-btn {
-  background: transparent;
-  border: 1px solid var(--line-ink);
-  color: var(--parchment-ink);
+  background: var(--card-tint);
+  border: 2px solid var(--ink);
+  color: var(--ink);
   padding: 6px 12px;
   margin: 0;
-  font-family: "Space Mono", monospace;
-  font-size: 0.72rem;
-  border-radius: 3px;
+  font-family: "Manrope", sans-serif;
+  font-weight: 700;
+  font-size: 0.74rem;
+  border-radius: 12px;
+  box-shadow: 0 2px 0 var(--ink);
 }
 
 .stats-close-btn:hover {
-  border-color: var(--rust);
-  color: var(--rust);
-  background: transparent;
+  background: var(--card-tint);
+  color: var(--coral-deep);
 }
 
 .stats-tabs {
@@ -869,20 +846,20 @@ body {
 
 .stats-tabs button {
   flex: 1;
-  background: transparent;
-  border: 1px solid var(--line-ink);
-  color: var(--parchment-ink);
-  font-family: "Space Mono", monospace;
-  font-size: 0.76rem;
+  background: var(--card-tint);
+  border: 2px solid var(--ink);
+  color: var(--ink);
+  font-family: "Manrope", sans-serif;
+  font-weight: 700;
+  font-size: 0.78rem;
   padding: 8px;
   margin: 0;
+  box-shadow: none;
 }
 
 .stats-tabs button.active {
-  background: var(--brass);
-  border-color: var(--brass);
-  color: var(--ink);
-  font-weight: 700;
+  background: var(--lime);
+  box-shadow: 0 2px 0 var(--ink);
 }
 
 .stats-month-nav {
@@ -891,28 +868,31 @@ body {
   justify-content: center;
   gap: 14px;
   margin-bottom: 12px;
-  font-family: "Space Mono", monospace;
-  font-size: 0.85rem;
+  font-family: "Space Grotesk", monospace;
+  font-weight: 700;
+  font-size: 0.9rem;
 }
 
 .stats-month-nav button {
-  background: transparent;
-  border: 1px solid var(--line-ink);
-  color: var(--parchment-ink);
+  background: var(--card-tint);
+  border: 2px solid var(--ink);
+  color: var(--ink);
   padding: 6px;
   margin: 0;
   display: flex;
+  box-shadow: none;
 }
 
 .stats-month-nav button:hover {
-  border-color: var(--bronze);
-  background: transparent;
+  background: var(--card-tint);
+  color: var(--coral-deep);
 }
 
 .stats-loading {
   text-align: center;
-  font-family: "Space Mono", monospace;
-  opacity: 0.6;
+  font-family: "Manrope", sans-serif;
+  font-weight: 700;
+  color: var(--ink-soft);
   padding: 20px 0;
 }
 
@@ -929,23 +909,24 @@ body {
 }
 
 .stats-summary strong {
-  font-family: "Space Mono", monospace;
-  font-size: 1.1rem;
+  font-family: "Space Grotesk", monospace;
+  font-size: 1.15rem;
 }
 
 .stats-summary span {
-  font-family: "Space Mono", monospace;
-  font-size: 0.62rem;
+  font-family: "Manrope", sans-serif;
+  font-weight: 700;
+  font-size: 0.64rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  opacity: 0.55;
+  color: var(--ink-faint);
   margin-top: 3px;
 }
 
 .stats-chart {
   display: flex;
   align-items: flex-end;
-  gap: 2px;
+  gap: 3px;
   height: 140px;
   padding: 48px 0 8px;
   position: relative;
@@ -970,15 +951,15 @@ body {
 
 .stats-bar-fill {
   width: 100%;
-  background: var(--bronze);
-  border-radius: 1px 1px 0 0;
+  background: var(--sky-deep);
+  border-radius: 5px 5px 0 0;
   transition: height 0.3s ease, opacity 0.2s ease;
-  opacity: 0.65;
+  opacity: 0.75;
 }
 
 .stats-bar-col.active .stats-bar-fill {
   opacity: 1;
-  background: var(--rust);
+  background: var(--coral);
 }
 
 .stats-tooltip {
@@ -986,13 +967,13 @@ body {
   bottom: calc(100% + 6px);
   left: 50%;
   transform: translateX(-50%);
-  background: var(--ink-soft);
-  border: 1px solid var(--line-strong);
+  background: var(--ink);
+  border: 2px solid var(--ink);
   padding: 4px 8px;
-  border-radius: 3px;
-  font-family: "Space Mono", monospace;
+  border-radius: 10px;
+  font-family: "Space Grotesk", monospace;
   font-size: 0.66rem;
-  color: var(--parchment);
+  color: #ffffff;
   white-space: nowrap;
   z-index: 5;
   display: flex;
@@ -1003,15 +984,16 @@ body {
 
 .stats-tooltip strong {
   font-size: 0.75rem;
-  color: var(--brass-bright);
+  color: var(--gold);
 }
 
 .stats-chart-axis {
   display: flex;
   justify-content: space-between;
-  font-family: "Space Mono", monospace;
+  font-family: "Space Grotesk", monospace;
+  font-weight: 600;
   font-size: 0.62rem;
-  opacity: 0.5;
+  color: var(--ink-faint);
   margin-top: 2px;
 }
 
@@ -1032,16 +1014,16 @@ body {
 }
 
 .toast {
-  background: var(--ink-soft);
-  border: 1px solid var(--line-strong);
-  border-left: 3px solid var(--brass);
+  background: var(--card);
+  border: 2px solid var(--ink);
   padding: 9px 14px;
-  border-radius: 3px;
-  font-family: "Space Mono", monospace;
-  font-size: 0.78rem;
-  color: var(--parchment);
+  border-radius: 14px;
+  font-family: "Manrope", sans-serif;
+  font-weight: 700;
+  font-size: 0.8rem;
+  color: var(--ink);
   text-align: center;
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 4px 0 var(--ink);
   animation: toastIn 0.3s ease, toastOut 0.3s ease 2.1s forwards;
 }
 
@@ -1059,7 +1041,7 @@ body {
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(10, 8, 5, 0.78);
+  background: rgba(16, 16, 54, 0.8);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1069,43 +1051,34 @@ body {
 
 .modal-card {
   position: relative;
-  background: linear-gradient(180deg, var(--parchment) 0%, var(--parchment-dim) 100%);
-  color: var(--parchment-ink);
-  border-radius: 5px;
+  background: var(--card);
+  color: var(--ink);
+  border: 3px solid var(--ink);
+  border-radius: 22px;
   padding: 28px 20px 22px;
   max-width: 340px;
   width: 100%;
   text-align: center;
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.55);
-}
-
-.modal-card::before {
-  content: "";
-  position: absolute;
-  inset: 6px;
-  border: 1px solid var(--line-ink);
-  border-radius: 3px;
-  pointer-events: none;
+  box-shadow: 8px 8px 0 rgba(16, 16, 54, 0.55);
 }
 
 .modal-icon {
-  color: var(--bronze);
+  color: var(--coral);
   margin-bottom: 8px;
 }
 
 .modal-card h2 {
   margin: 0 0 8px;
-  font-family: "Fraunces", serif;
-  font-style: italic;
-  font-weight: 500;
-  font-size: 1.3rem;
+  font-family: "Baloo 2", sans-serif;
+  font-weight: 700;
+  font-size: 1.35rem;
 }
 
 .modal-card p {
   margin: 0 0 18px;
   font-size: 0.88rem;
   line-height: 1.45;
-  opacity: 0.8;
+  color: var(--ink-soft);
 }
 
 .modal-primary-btn {
@@ -1122,23 +1095,25 @@ body {
   top: 10px;
   right: 10px;
   background: transparent;
-  color: var(--parchment-ink);
+  color: var(--ink-soft);
   padding: 6px;
   margin: 0;
-  opacity: 0.55;
+  box-shadow: none;
+  border: none;
 }
 
 .modal-close-btn:hover {
   background: transparent;
-  opacity: 1;
-  color: var(--rust);
+  color: var(--coral-deep);
+  box-shadow: none;
 }
 
 .modal-install-hint {
   margin-top: 16px;
-  font-family: "Space Mono", monospace;
-  font-size: 0.7rem;
-  opacity: 0.6;
+  font-family: "Manrope", sans-serif;
+  font-weight: 600;
+  font-size: 0.72rem;
+  color: var(--ink-faint);
 }
 
 .modal-install-links {
@@ -1149,62 +1124,66 @@ body {
 }
 
 .modal-install-links button {
-  background: transparent;
-  border: 1px solid var(--line-ink);
-  color: var(--parchment-ink);
-  font-family: "Space Mono", monospace;
-  font-size: 0.72rem;
+  background: var(--card-tint);
+  border: 2px solid var(--ink);
+  color: var(--ink);
+  font-family: "Manrope", sans-serif;
+  font-weight: 700;
+  font-size: 0.74rem;
   padding: 6px 12px;
+  box-shadow: 0 2px 0 var(--ink);
 }
 
 .modal-install-links button:hover {
-  border-color: var(--bronze);
-  background: transparent;
-  color: var(--bronze);
+  background: var(--card-tint);
+  color: var(--coral-deep);
 }
 
-/* --- Buttons / debug --- */
+/* --- Buttons: chunky 3D press --- */
 
 button {
-  font-family: "Karla", sans-serif;
-  font-weight: 700;
+  font-family: "Manrope", sans-serif;
+  font-weight: 800;
   font-size: 0.85rem;
-  letter-spacing: 0.01em;
+  letter-spacing: 0.005em;
   padding: 10px 16px;
-  border-radius: 3px;
-  border: 1px solid rgba(43, 32, 19, 0.3);
-  background: var(--brass);
+  border-radius: 14px;
+  border: 2px solid var(--ink);
+  background: var(--lime);
   color: var(--ink);
   margin: 4px;
   cursor: pointer;
-  transition: background 0.15s ease;
-  box-shadow: 0 2px 5px rgba(43, 32, 19, 0.25);
+  box-shadow: 0 4px 0 var(--ink);
+  transition: transform 0.08s ease, box-shadow 0.08s ease, background 0.15s ease;
 }
 
 button:hover {
-  background: var(--brass-bright);
+  background: var(--lime-deep);
+}
+
+button:active {
+  transform: translateY(4px);
+  box-shadow: 0 0 0 var(--ink);
 }
 
 .debug-reset-btn {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  background: transparent;
-  border: 1px solid var(--line-strong);
-  color: var(--parchment);
+  background: var(--coral);
+  color: var(--ink);
 }
 
 .debug-reset-btn:hover {
-  border-color: var(--rust);
-  color: var(--rust-bright);
-  background: transparent;
+  background: var(--coral-deep);
 }
 
 .debug-panel {
   margin-top: 26px;
-  opacity: 0.6;
-  font-family: "Space Mono", monospace;
-  font-size: 0.7rem;
+  font-family: "Manrope", sans-serif;
+  font-weight: 700;
+  font-size: 0.74rem;
+  color: rgba(255, 255, 255, 0.55);
   text-align: center;
 }
 
@@ -1213,30 +1192,30 @@ button:hover {
   align-items: center;
   justify-content: center;
   gap: 5px;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.02em;
   text-transform: uppercase;
 }
 
 .debug-panel button {
-  background: transparent;
-  border: 1px solid var(--line-strong);
-  color: var(--parchment);
-  font-size: 0.72rem;
+  background: rgba(255, 255, 255, 0.1);
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  color: #ffffff;
+  font-size: 0.74rem;
   padding: 6px 12px;
+  box-shadow: none;
 }
 
 .debug-panel button:hover {
-  border-color: var(--brass);
-  color: var(--brass-bright);
-  background: transparent;
+  background: rgba(255, 255, 255, 0.16);
+  color: var(--lime);
 }
 
 /* --- Focus --- */
 
 :focus-visible {
-  outline: 2px solid var(--brass-bright);
+  outline: 3px solid var(--gold);
   outline-offset: 2px;
-  border-radius: 2px;
+  border-radius: 4px;
 }
 
 /* --- Motion --- */
@@ -1248,7 +1227,8 @@ button:hover {
   .egg-wrap.shake-3,
   .spin,
   .particle,
-  .footprint {
+  .footprint,
+  .rarity-legendary {
     animation: none !important;
   }
 }

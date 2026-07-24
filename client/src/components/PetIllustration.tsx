@@ -11,7 +11,7 @@ const THEMES: Record<string, CreatureTheme> = {
   Волк: { body: "#8a93a6", belly: "#e7ecf3", accent: "#525b6b", earShape: "pointed" },
   Тигр: { body: "#f0a03c", belly: "#fff1d6", accent: "#3a2a1a", earShape: "round", decoration: "stripes" },
   Дракон: { body: "#5bc98e", belly: "#e3fff0", accent: "#1f6b47", earShape: "pointed", decoration: "spikes" },
-  unknown: { body: "#c99a44", belly: "#ede1c4", accent: "#5a3f1f", earShape: "round" },
+  unknown: { body: "#9b6bff", belly: "#f3f1ff", accent: "#4a2fa0", earShape: "round" },
 };
 
 function Ears({ theme }: { theme: CreatureTheme }) {
@@ -101,16 +101,16 @@ export function EggIllustration({ cracks, size = 120 }: { cracks: number; size?:
       <ellipse cx="60" cy="112" rx="30" ry="6" fill="#000" opacity="0.18" />
       <path
         d="M60 8 C90 8 100 60 100 82 C100 106 82 116 60 116 C38 116 20 106 20 82 C20 60 30 8 60 8 Z"
-        fill="#fdf3df"
-        stroke="#e8d3a5"
-        strokeWidth="2"
+        fill="#ffffff"
+        stroke="#1b1b3a"
+        strokeWidth="3"
       />
-      <circle cx="45" cy="55" r="3" fill="#e8d3a5" />
-      <circle cx="72" cy="70" r="2.5" fill="#e8d3a5" />
-      <circle cx="55" cy="90" r="2" fill="#e8d3a5" />
-      {cracks >= 1 && <path d="M60 20 L52 45 L64 55 L50 75" stroke="#6b4f2a" strokeWidth="3" fill="none" strokeLinecap="round" />}
-      {cracks >= 2 && <path d="M78 35 L86 50 L74 62" stroke="#6b4f2a" strokeWidth="3" fill="none" strokeLinecap="round" />}
-      {cracks >= 3 && <path d="M40 70 L48 85 L38 98" stroke="#6b4f2a" strokeWidth="3" fill="none" strokeLinecap="round" />}
+      <circle cx="45" cy="55" r="3" fill="#f3f1ff" />
+      <circle cx="72" cy="70" r="2.5" fill="#f3f1ff" />
+      <circle cx="55" cy="90" r="2" fill="#f3f1ff" />
+      {cracks >= 1 && <path d="M60 20 L52 45 L64 55 L50 75" stroke="#ff5c7a" strokeWidth="3" fill="none" strokeLinecap="round" />}
+      {cracks >= 2 && <path d="M78 35 L86 50 L74 62" stroke="#ff5c7a" strokeWidth="3" fill="none" strokeLinecap="round" />}
+      {cracks >= 3 && <path d="M40 70 L48 85 L38 98" stroke="#ff5c7a" strokeWidth="3" fill="none" strokeLinecap="round" />}
     </svg>
   );
 }

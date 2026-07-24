@@ -355,7 +355,7 @@ export default function App() {
 
       <header className="app-header">
         <div>
-          <span className="app-eyebrow">Журнал №{String(pet.id).padStart(3, "0")}</span>
+          <span className="app-eyebrow">ID #{String(pet.id).padStart(3, "0")}</span>
           <h1>
             <PawPrint size={22} /> WalkPet
           </h1>
@@ -467,7 +467,7 @@ function PetPanel({
 
   return (
     <div className="panel">
-      <div className="scene-frame">
+      <div className={`scene-frame rarity-${pet.rarity}`}>
         <div className="stats-rail">
           <StatChip icon={Heart} label="Здоровье" value={pet.health} max={statCap} />
           <StatChip icon={Smile} label="Счастье" value={pet.happiness} max={statCap} />
