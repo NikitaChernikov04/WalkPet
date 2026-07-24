@@ -42,16 +42,6 @@ export async function fetchPet(): Promise<PetState> {
   return res.json();
 }
 
-export async function syncSteps(stepsToday: number): Promise<PetState> {
-  const res = await fetch("/api/steps", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...initDataHeader() },
-    body: JSON.stringify({ stepsToday }),
-  });
-  if (!res.ok) throw new Error(`POST /api/steps failed: ${res.status}`);
-  return res.json();
-}
-
 export async function requestAvatar(description: string): Promise<{ pet: Pet }> {
   const res = await fetch("/api/avatar", {
     method: "POST",
@@ -118,13 +108,14 @@ export async function getStepHistory(params: { range?: 7 | 30; month?: string })
   return res.json();
 }
 
-export async function restoreDebugSnapshot(pet: Pet, todaySteps: number): Promise<PetState> {
-  const res = await fetch("/api/debug-reset", {
+/** Irreversible: wipes the pet back to a fresh egg and clears its step history. Google Fit
+ *  stays connected and simply starts contributing to the new pet from zero. */
+export async function resetPet(): Promise<PetState> {
+  const res = await fetch("/api/pet-reset", {
     method: "POST",
-    headers: { "Content-Type": "application/json", ...initDataHeader() },
-    body: JSON.stringify({ pet, todaySteps }),
+    headers: { ...initDataHeader() },
   });
-  if (!res.ok) throw new Error(`POST /api/debug-reset failed: ${res.status}`);
+  if (!res.ok) throw new Error(`POST /api/pet-reset failed: ${res.status}`);
   return res.json();
 }
 

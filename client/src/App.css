@@ -735,6 +735,23 @@ body {
   margin: 0 0 8px;
 }
 
+.avatar-sync-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--card-tint);
+  color: var(--ink);
+  font-size: 0.74rem;
+  padding: 7px 12px;
+  box-shadow: 0 2px 0 var(--ink);
+  margin: 4px 0 14px;
+}
+
+.avatar-sync-btn:hover {
+  background: var(--card-tint);
+  color: var(--violet-deep);
+}
+
 .avatar-gen textarea {
   width: 100%;
   min-height: 54px;
@@ -808,6 +825,18 @@ body {
 .milestones .done svg {
   background: var(--ink);
   color: var(--lime);
+}
+
+.milestones .locked {
+  color: var(--ink-faint);
+  background: var(--card-tint);
+  border: 2px dashed var(--line);
+  opacity: 0.75;
+}
+
+.milestones .locked svg {
+  background: transparent;
+  color: var(--ink-faint);
 }
 
 /* --- Stats screen --- */
@@ -1180,48 +1209,51 @@ button:active {
   box-shadow: 0 0 0 var(--ink);
 }
 
-.debug-reset-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  background: var(--coral);
-  color: var(--ink);
-}
-
-.debug-reset-btn:hover {
-  background: var(--coral-deep);
-}
-
-.debug-panel {
+.reset-panel {
   margin-top: 26px;
-  font-family: "Manrope", sans-serif;
-  font-weight: 700;
-  font-size: 0.74rem;
-  color: rgba(255, 255, 255, 0.55);
   text-align: center;
 }
 
-.debug-panel p {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 5px;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
+.reset-panel p {
+  font-family: "Manrope", sans-serif;
+  font-weight: 600;
+  font-size: 0.72rem;
+  color: rgba(255, 255, 255, 0.6);
+  max-width: 260px;
+  margin: 0 auto 8px;
+  line-height: 1.4;
 }
 
-.debug-panel button {
-  background: rgba(255, 255, 255, 0.1);
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  color: #ffffff;
-  font-size: 0.74rem;
+.reset-pet-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: transparent;
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 0.72rem;
   padding: 6px 12px;
   box-shadow: none;
 }
 
-.debug-panel button:hover {
-  background: rgba(255, 255, 255, 0.16);
-  color: var(--lime);
+.reset-pet-btn:hover {
+  border-color: var(--coral);
+  color: var(--coral);
+  background: transparent;
+}
+
+.reset-cancel-btn {
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.72rem;
+  padding: 6px 10px;
+  box-shadow: none;
+}
+
+.reset-cancel-btn:hover {
+  background: transparent;
+  color: #ffffff;
 }
 
 /* --- Focus --- */

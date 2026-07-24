@@ -39,12 +39,18 @@ export function statXpMultiplier(avgStat: number, statCap: number): number {
   return 0.7 + ratio * 0.6;
 }
 
-export type EvolutionStage = "baby" | "adult" | "elder" | "ascended";
+// Seven tiers instead of the original four, so gear (and the title that comes with it)
+// updates more often across a pet's lifetime — spacing widens with level to match the
+// leveling curve's own growing cost per level (each tier roughly doubles the XP of the last).
+export type EvolutionStage = "baby" | "novice" | "wanderer" | "veteran" | "champion" | "master" | "legend";
 
 const EVOLUTION_THRESHOLDS: [EvolutionStage, number][] = [
-  ["ascended", 30],
-  ["elder", 15],
-  ["adult", 5],
+  ["legend", 48],
+  ["master", 34],
+  ["champion", 24],
+  ["veteran", 16],
+  ["wanderer", 9],
+  ["novice", 4],
   ["baby", 0],
 ];
 
@@ -55,39 +61,59 @@ export function evolutionStageForLevel(level: number): EvolutionStage {
   return "baby";
 }
 
+// Doubles as the pet's displayed title/rank — not just an internal stage key.
 export const EVOLUTION_STAGE_LABELS: Record<EvolutionStage, string> = {
   baby: "Детёныш",
-  adult: "Взрослый",
-  elder: "Матёрый",
-  ascended: "Вознёсшийся",
+  novice: "Новичок",
+  wanderer: "Странник",
+  veteran: "Ветеран",
+  champion: "Чемпион",
+  master: "Мастер",
+  legend: "Легенда",
 };
 
 // Body/proportion changes per stage — layered onto the AI art prompt the same way
 // RARITY_PROMPT_MODIFIERS makes rarer pets look fancier (see species.ts).
 export const EVOLUTION_BODY_PROMPT: Record<EvolutionStage, string> = {
   baby: "Small, young, extra-cute baby proportions with a big head and tiny round body.",
-  adult: "Fully grown, confident stance, well-defined proportions and features.",
-  elder: "Powerful battle-hardened veteran build, larger and more imposing, with a richer fur/scale texture.",
-  ascended: "Awe-inspiring ascended form with a subtle magical aura glowing softly around it.",
+  novice: "Growing out of baby proportions, a bit more upright and confident, still youthful.",
+  wanderer: "Lean, alert, well-traveled build with a confident stance.",
+  veteran: "Sturdier, more muscular build, a few battle-worn details, richer fur/scale texture.",
+  champion: "Bold, powerful, imposing build radiating confidence and strength.",
+  master: "Refined, masterful bearing with a subtle magical aura glowing softly around it.",
+  legend: "Awe-inspiring legendary form with a radiant magical aura glowing around it.",
 };
 
 // Full cumulative outfit description, for a FROM-SCRATCH generation (hatch, or regenerating
 // after a failure) — each stage restates everything it should be wearing by that point.
 export const EVOLUTION_OUTFIT_PROMPT: Record<EvolutionStage, string> = {
   baby: "Completely bare and unclothed — no clothing, no accessories, no items worn, just its natural body, fur/scales/feathers and colors.",
-  adult: "Wearing exactly one simple item of clothing or gear, such as a bandana, a scarf, or a small collar.",
-  elder: "Wearing a more elaborate outfit than a simple accessory — light armor pieces, a cloak, or a warrior's hat — plus one extra accessory.",
-  ascended: "Wearing an ornate, majestic full outfit — golden armor, a flowing cape, and a crown or a glowing halo.",
+  novice: "Wearing exactly one simple item of clothing or gear, such as a bandana, a scarf, or a small collar.",
+  wanderer: "Wearing simple travel gear — a small satchel or backpack — plus the accessory from before.",
+  veteran: "Wearing light armor pieces or a cloak on top of its travel gear, plus one extra accessory.",
+  champion: "Wearing bold, sturdy armor with a weapon or shield, looking like a proud champion.",
+  master: "Wearing ornate, high-quality gear with a subtle magical glow, marking real mastery.",
+  legend: "Wearing an ornate, majestic full outfit — golden armor, a flowing cape, and a crown or a glowing halo.",
 };
 
 // Only the NEW addition since the previous stage — used for image-to-image evolution edits,
 // where the existing look (including gear already added) comes from the reference image
 // itself and must not be redescribed or it risks being replaced instead of built upon.
 export const EVOLUTION_GEAR_DELTA_PROMPT: Partial<Record<EvolutionStage, string>> = {
-  adult:
+  novice:
     "Add exactly one simple item of clothing or gear onto the character — such as a bandana, a scarf, or a small collar — fitted naturally. Do not change the character's face, body shape, colors, pose, or the background.",
-  elder:
-    "Add a more elaborate outfit on top of what it's already wearing — light armor pieces, a cloak, or a warrior's hat — plus one extra accessory. Do not change the character's face, body shape, colors, pose, or the background.",
-  ascended:
+  wanderer:
+    "Add a small satchel or backpack onto the character, on top of what it's already wearing. Do not change the character's face, body shape, colors, pose, or the background.",
+  veteran:
+    "Add light armor pieces or a cloak on top of what it's already wearing, plus one extra accessory. Do not change the character's face, body shape, colors, pose, or the background.",
+  champion:
+    "Upgrade its gear to bold, sturdy armor with a weapon or shield, on top of what it's already wearing. Do not change the character's face, body shape, colors, pose, or the background.",
+  master:
+    "Upgrade its gear to ornate, high-quality equipment with a subtle magical glow, on top of what it's already wearing. Do not change the character's face, body shape, colors, pose, or the background.",
+  legend:
     "Add an ornate, majestic full outfit on top of what it's already wearing — golden armor, a flowing cape, and a crown or glowing halo. Do not change the character's face, body shape, colors, pose, or the background.",
 };
+
+// A small, immediate reward on every level-up (not just at gear-tier boundaries) — this is
+// what makes leveling feel good level-to-level, not just every several levels.
+export const LEVEL_UP_STAT_BONUS = 2;

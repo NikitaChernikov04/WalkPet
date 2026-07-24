@@ -9,16 +9,26 @@ import {
   RARITY_STAT_CAP_BONUS,
   type Rarity,
 } from "./species.js";
-import { evolutionStageForLevel, levelForXp, statCapForLevel, statXpMultiplier } from "./leveling.js";
+import {
+  evolutionStageForLevel,
+  LEVEL_UP_STAT_BONUS,
+  levelForXp,
+  statCapForLevel,
+  statXpMultiplier,
+} from "./leveling.js";
 
 export const EGG_CRACK_STEPS = 3000;
 export const EGG_HATCH_STEPS = 7000;
 
+// `minLevel` gates a milestone behind pet level, so the daily-goal list itself grows as the
+// pet levels up instead of staying fixed at 4 forever.
 export const MILESTONES = {
-  food: { steps: 1000, stat: "health", amount: 5 },
-  mood: { steps: 5000, stat: "happiness", amount: 5 },
-  training: { steps: 10000, stat: "strength", amount: 5 },
-  adventure: { steps: 15000, stat: "intellect", amount: 5 },
+  food: { steps: 1000, stat: "health", amount: 5, minLevel: 0 },
+  mood: { steps: 5000, stat: "happiness", amount: 5, minLevel: 0 },
+  training: { steps: 10000, stat: "strength", amount: 5, minLevel: 0 },
+  adventure: { steps: 15000, stat: "intellect", amount: 5, minLevel: 0 },
+  marathon: { steps: 20000, stat: "strength", amount: 5, minLevel: 10 },
+  peak: { steps: 25000, stat: "intellect", amount: 5, minLevel: 20 },
 } as const;
 
 type MilestoneKey = keyof typeof MILESTONES;
@@ -129,6 +139,17 @@ export async function recordSteps(userId: number, stepsToday: number): Promise<P
   // pet's care bars simply go further — this is what ties rarity to something real too.
   const statCap = statCapForLevel(level) + RARITY_STAT_CAP_BONUS[pet.rarity];
 
+  // Every level gained (could be more than one on a big sync) grants an immediate flat bonus
+  // to all four stats — a level-up feels rewarding on its own, not just via the raised cap.
+  const levelsGained = Math.max(0, level - pet.level);
+  if (levelsGained > 0) {
+    const bonus = LEVEL_UP_STAT_BONUS * levelsGained;
+    health = clamp(health + bonus, statCap);
+    happiness = clamp(happiness + bonus, statCap);
+    intellect = clamp(intellect + bonus, statCap);
+    strength = clamp(strength + bonus, statCap);
+  }
+
   // Streak bookkeeping, plus a tamagotchi-style stat decay for each fully inactive day since
   // this player was last seen — only computed once, the first time we see a new calendar day.
   let streakDays = pet.streak_days;
@@ -167,6 +188,7 @@ export async function recordSteps(userId: number, stepsToday: number): Promise<P
   const appliedBefore = new Set((row?.milestones_applied ?? "").split(",").filter(Boolean));
   const appliedNow = new Set(appliedBefore);
   for (const [key, milestone] of Object.entries(MILESTONES) as [MilestoneKey, (typeof MILESTONES)[MilestoneKey]][]) {
+    if (level < milestone.minLevel) continue;
     if (newSteps >= milestone.steps && !appliedBefore.has(key)) {
       appliedNow.add(key);
       const gain = Math.max(1, Math.round(milestone.amount * careMultiplier));
@@ -253,67 +275,27 @@ export async function recordSteps(userId: number, stepsToday: number): Promise<P
   return updated.rows[0] as unknown as Pet;
 }
 
-/** Debug-only: restores the pet (and today's step log) to a snapshot taken client-side right
- *  before a debug-tap session started, so the "reset" undoes only the manually-tapped steps —
- *  real history from Google Fit, captured in that snapshot, is untouched.
- *  Milestones_applied is recomputed from the restored day-total so a later sync doesn't skip
- *  re-granting a milestone whose stat bonus this restore just undid. */
-export async function restorePetSnapshot(
-  userId: number,
-  snapshot: Omit<Pet, "id" | "user_id" | "created_at">,
-  todaySteps: number,
-): Promise<Pet> {
+/** Wipes a pet back to a brand-new egg and deletes its step history, so the player can start
+ *  completely clean — e.g. after removing the manual debug-step controls, to shed any steps
+ *  those added that are now inseparably mixed into lifetime_steps/step_logs alongside real
+ *  Google Fit data. Irreversible; the Google account link itself (on the `users` row) is
+ *  untouched, so Google Fit stays connected and simply starts contributing to a fresh pet. */
+export async function resetPet(userId: number): Promise<Pet> {
   await ensureSchema();
-  const date = today();
-
-  const appliedNow = (Object.entries(MILESTONES) as [MilestoneKey, (typeof MILESTONES)[MilestoneKey]][])
-    .filter(([, m]) => todaySteps >= m.steps)
-    .map(([key]) => key)
-    .join(",");
-
-  const existing = await db.execute({ sql: "SELECT 1 FROM step_logs WHERE user_id = ? AND date = ?", args: [userId, date] });
-  if (existing.rows[0]) {
-    await db.execute({
-      sql: "UPDATE step_logs SET steps = ?, milestones_applied = ? WHERE user_id = ? AND date = ?",
-      args: [todaySteps, appliedNow, userId, date],
-    });
-  } else {
-    await db.execute({
-      sql: "INSERT INTO step_logs (user_id, date, steps, milestones_applied) VALUES (?, ?, ?, ?)",
-      args: [userId, date, todaySteps, appliedNow],
-    });
-  }
-
-  await db.execute({
-    sql: `UPDATE pets SET stage = ?, species = ?, rarity = ?, level = ?, xp = ?, name = ?, lifetime_steps = ?, health = ?, happiness = ?,
-          intellect = ?, strength = ?, streak_days = ?, last_active_date = ?, hatched_at = ?,
-          avatar_url = ?, avatar_status = ?, avatar_generation_id = ?, avatar_description = ?, avatar_seed = ?, avatar_source_url = ?
-          WHERE user_id = ?`,
-    args: [
-      snapshot.stage,
-      snapshot.species,
-      snapshot.rarity,
-      snapshot.level,
-      snapshot.xp,
-      snapshot.name,
-      snapshot.lifetime_steps,
-      snapshot.health,
-      snapshot.happiness,
-      snapshot.intellect,
-      snapshot.strength,
-      snapshot.streak_days,
-      snapshot.last_active_date,
-      snapshot.hatched_at,
-      snapshot.avatar_url,
-      snapshot.avatar_status,
-      snapshot.avatar_generation_id,
-      snapshot.avatar_description,
-      snapshot.avatar_seed,
-      snapshot.avatar_source_url,
-      userId,
+  await db.batch(
+    [
+      { sql: "DELETE FROM step_logs WHERE user_id = ?", args: [userId] },
+      {
+        sql: `UPDATE pets SET stage = 'egg', species = 'unknown', rarity = 'common', level = 0, xp = 0, name = NULL,
+              lifetime_steps = 0, health = 50, happiness = 50, intellect = 10, strength = 10, streak_days = 0,
+              last_active_date = NULL, hatched_at = NULL, avatar_url = NULL, avatar_status = 'none',
+              avatar_generation_id = NULL, avatar_description = NULL, avatar_seed = NULL, avatar_source_url = NULL
+              WHERE user_id = ?`,
+        args: [userId],
+      },
     ],
-  });
-
+    "write",
+  );
   return getOrCreatePet(userId);
 }
 

@@ -6,11 +6,10 @@ import {
   getGoogleFitStatus,
   pollAvatar,
   requestAvatar,
-  restoreDebugSnapshot,
+  resetPet,
   setCustomPetName,
   startGoogleFitAuth,
   syncGoogleFit,
-  syncSteps,
   type Pet,
   type Rarity,
 } from "./lib/api";
@@ -38,9 +37,11 @@ import {
   Flame,
   Apple,
   Compass,
-  Footprints,
+  Lock,
   PawPrint,
-  RotateCcw,
+  Trash2,
+  Trophy,
+  Zap,
   BarChart3,
 } from "lucide-react";
 
@@ -72,11 +73,14 @@ const RARITY_DECAY_RESISTANCE: Record<Rarity, number> = {
   legendary: 0.35,
 };
 
+// minLevel gates a milestone behind pet level — mirrors MILESTONES in api/_lib/pet-logic.ts.
 const MILESTONES = [
-  { steps: 1000, icon: Apple, label: "Еда", toast: "🍎 Питомец поел! +5 здоровья" },
-  { steps: 5000, icon: Smile, label: "Настроение", toast: "😊 Отличное настроение! +5 счастья" },
-  { steps: 10000, icon: Dumbbell, label: "Тренировка", toast: "💪 Тренировка завершена! +5 силы" },
-  { steps: 15000, icon: Compass, label: "Приключение", toast: "🗺 Приключение! +5 интеллекта" },
+  { steps: 1000, icon: Apple, label: "Еда", toast: "🍎 Питомец поел! +5 здоровья", minLevel: 0 },
+  { steps: 5000, icon: Smile, label: "Настроение", toast: "😊 Отличное настроение! +5 счастья", minLevel: 0 },
+  { steps: 10000, icon: Dumbbell, label: "Тренировка", toast: "💪 Тренировка завершена! +5 силы", minLevel: 0 },
+  { steps: 15000, icon: Compass, label: "Приключение", toast: "🗺 Приключение! +5 интеллекта", minLevel: 0 },
+  { steps: 20000, icon: Zap, label: "Марафон", toast: "⚡ Марафон пройден! +5 силы", minLevel: 10 },
+  { steps: 25000, icon: Trophy, label: "Вершина", toast: "🏆 Вершина покорена! +5 интеллекта", minLevel: 20 },
 ];
 
 function StatChip({ icon: Icon, label, value, max = 100 }: { icon: typeof Heart; label: string; value: number; max?: number }) {
@@ -104,10 +108,10 @@ export default function App() {
   const [googleFitConnected, setGoogleFitConnected] = useState<boolean | null>(null);
   const [showStats, setShowStats] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
-  const pendingStepsRef = useRef(0);
-  const lastSyncedStepsRef = useRef(0);
-  const debugModeRef = useRef(false);
-  const preDebugSnapshotRef = useRef<{ pet: Pet; todaySteps: number } | null>(null);
+  const [confirmingReset, setConfirmingReset] = useState(false);
+  // Tracks the latest known step count purely so the Google Fit sync can tell "did today's
+  // steps just go up" and give the pet a little bounce — no debounced write-back involved.
+  const lastKnownStepsRef = useRef(0);
   const prevTodayStepsRef = useRef(0);
   const prevStageRef = useRef<string | null>(null);
   const prevLevelRef = useRef<number | null>(null);
@@ -126,8 +130,7 @@ export default function App() {
       .then(({ pet, todaySteps }) => {
         setPet(pet);
         setTodaySteps(todaySteps);
-        pendingStepsRef.current = todaySteps;
-        lastSyncedStepsRef.current = todaySteps;
+        lastKnownStepsRef.current = todaySteps;
         prevTodayStepsRef.current = todaySteps;
         prevStageRef.current = pet.stage;
         prevLevelRef.current = pet.level;
@@ -148,29 +151,11 @@ export default function App() {
         .then(({ pet, todaySteps }) => {
           setPet(pet);
           setTodaySteps(todaySteps);
-          pendingStepsRef.current = todaySteps;
-          lastSyncedStepsRef.current = todaySteps;
+          lastKnownStepsRef.current = todaySteps;
           prevTodayStepsRef.current = todaySteps;
         })
         .catch((e) => setError(String(e)));
     }, 30000);
-    return () => clearInterval(interval);
-  }, []);
-
-  // Pushes debug-tapped steps to the server. Real step counts come exclusively from Google
-  // Fit (see the sync effect below); this only fires when a debug tap actually changed the
-  // local count, so it stays idle — not fighting Google Fit's numbers — the rest of the time.
-  useEffect(() => {
-    const interval = setInterval(() => {
-      if (pendingStepsRef.current === lastSyncedStepsRef.current) return;
-      lastSyncedStepsRef.current = pendingStepsRef.current;
-      syncSteps(pendingStepsRef.current)
-        .then(({ pet, todaySteps }) => {
-          setPet(pet);
-          setTodaySteps(todaySteps);
-        })
-        .catch((e) => setError(String(e)));
-    }, 2000);
     return () => clearInterval(interval);
   }, []);
 
@@ -192,19 +177,17 @@ export default function App() {
     return () => document.removeEventListener("visibilitychange", onVisible);
   }, []);
 
-  // Google Fit is the sole source of real step data once connected — sync it in periodically.
-  // Paused during a debug session (see addDebugSteps/handleResetDebug) so real Google Fit
-  // data doesn't immediately overwrite a manual test reset.
+  // Google Fit is the sole source of step data — sync it in periodically.
   useEffect(() => {
     if (!googleFitConnected) return;
     const sync = () => {
-      if (debugModeRef.current) return;
       syncGoogleFit()
         .then(({ pet, todaySteps }) => {
           setPet(pet);
+          // Give the pet a little bounce when a sync actually brought in new steps.
+          if (todaySteps > lastKnownStepsRef.current) setStepTick((t) => t + 1);
+          lastKnownStepsRef.current = todaySteps;
           setTodaySteps(todaySteps);
-          pendingStepsRef.current = todaySteps;
-          lastSyncedStepsRef.current = todaySteps;
         })
         .catch((e) => setError(String(e)));
     };
@@ -246,6 +229,7 @@ export default function App() {
   useEffect(() => {
     if (!pet) return;
     for (const m of MILESTONES) {
+      if (pet.level < m.minLevel) continue;
       if (todaySteps >= m.steps && prevTodayStepsRef.current < m.steps) pushToast(m.toast);
     }
     prevTodayStepsRef.current = todaySteps;
@@ -270,41 +254,22 @@ export default function App() {
     prevLevelRef.current = pet.level;
   }, [todaySteps, pet]);
 
-  // Debug controls are meant to be used without a real device or Google Fit fighting them
-  // over the step count, so the first tap of a session snapshots the pre-tap state (to
-  // restore later) and pauses the Google Fit auto-sync until the reset below resumes it.
-  const addDebugSteps = (n: number) => {
-    if (!preDebugSnapshotRef.current && pet) {
-      preDebugSnapshotRef.current = { pet, todaySteps };
-    }
-    debugModeRef.current = true;
-    pendingStepsRef.current += n;
-    setTodaySteps(pendingStepsRef.current);
-    setStepTick((t) => t + 1);
-  };
-
-  // Restores exactly the pre-debug-session snapshot — undoing only what the debug buttons
-  // added, never touching real Google Fit history that came in before or after.
-  const handleResetDebug = () => {
-    const snapshot = preDebugSnapshotRef.current;
-    if (!snapshot) {
-      pushToast("Нечего сбрасывать — сначала натапай отладочные шаги");
+  // Irreversible: wipes the pet back to a fresh egg and clears step history, so anything
+  // built up from now on is 100% real Google Fit data. Two-tap confirm (no native dialog).
+  const handleResetPet = () => {
+    if (!confirmingReset) {
+      setConfirmingReset(true);
       return;
     }
-    // Zero the locally-cached step count immediately (not just after the response comes
-    // back) so a debounced sync tick firing mid-request can't resend the stale pre-reset
-    // total and have the server's idempotent max() restore it.
-    pendingStepsRef.current = snapshot.todaySteps;
-    lastSyncedStepsRef.current = snapshot.todaySteps;
-    setTodaySteps(snapshot.todaySteps);
-    restoreDebugSnapshot(snapshot.pet, snapshot.todaySteps)
+    setConfirmingReset(false);
+    resetPet()
       .then(({ pet, todaySteps }) => {
-        pendingStepsRef.current = todaySteps;
-        lastSyncedStepsRef.current = todaySteps;
+        lastKnownStepsRef.current = todaySteps;
+        prevTodayStepsRef.current = todaySteps;
+        prevStageRef.current = pet.stage;
+        prevLevelRef.current = pet.level;
         setPet(pet);
         setTodaySteps(todaySteps);
-        preDebugSnapshotRef.current = null;
-        debugModeRef.current = false;
       })
       .catch((e) => setError(String(e)));
   };
@@ -411,15 +376,22 @@ export default function App() {
         </>
       )}
 
-      <div className="debug-panel">
-        <p>
-          <Footprints size={14} /> Отладка (без телефона):
-        </p>
-        <button onClick={() => addDebugSteps(500)}>+500 шагов</button>
-        <button onClick={() => addDebugSteps(2000)}>+2000 шагов</button>
-        <button className="debug-reset-btn" onClick={handleResetDebug}>
-          <RotateCcw size={14} /> Сбросить всё
-        </button>
+      <div className="reset-panel">
+        {confirmingReset ? (
+          <>
+            <p>Точно сбросить питомца? Это необратимо — все шаги и прогресс удалятся.</p>
+            <button className="reset-pet-btn" onClick={handleResetPet}>
+              <Trash2 size={14} /> Да, сбросить
+            </button>
+            <button className="reset-cancel-btn" onClick={() => setConfirmingReset(false)}>
+              Отмена
+            </button>
+          </>
+        ) : (
+          <button className="reset-pet-btn" onClick={handleResetPet}>
+            <Trash2 size={14} /> Сбросить питомца
+          </button>
+        )}
       </div>
     </div>
   );
@@ -528,12 +500,13 @@ function PetPanel({
 
       <ul className="milestones">
         {MILESTONES.map((m) => {
-          const Icon = m.icon;
-          const done = todaySteps >= m.steps;
+          const locked = pet.level < m.minLevel;
+          const Icon = locked ? Lock : m.icon;
+          const done = !locked && todaySteps >= m.steps;
           return (
-            <li key={m.steps} className={done ? "done" : ""}>
+            <li key={m.steps} className={locked ? "locked" : done ? "done" : ""}>
               <Icon size={16} />
-              {m.label} ({m.steps.toLocaleString("ru-RU")})
+              {locked ? `Открывается на ур. ${m.minLevel}` : `${m.label} (${m.steps.toLocaleString("ru-RU")})`}
             </li>
           );
         })}

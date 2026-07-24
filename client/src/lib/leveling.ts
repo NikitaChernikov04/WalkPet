@@ -22,12 +22,15 @@ export function statXpMultiplier(avgStat: number, statCap: number): number {
   return 0.7 + ratio * 0.6;
 }
 
-export type EvolutionStage = "baby" | "adult" | "elder" | "ascended";
+export type EvolutionStage = "baby" | "novice" | "wanderer" | "veteran" | "champion" | "master" | "legend";
 
 const EVOLUTION_THRESHOLDS: [EvolutionStage, number][] = [
-  ["ascended", 30],
-  ["elder", 15],
-  ["adult", 5],
+  ["legend", 48],
+  ["master", 34],
+  ["champion", 24],
+  ["veteran", 16],
+  ["wanderer", 9],
+  ["novice", 4],
   ["baby", 0],
 ];
 
@@ -38,9 +41,13 @@ export function evolutionStageForLevel(level: number): EvolutionStage {
   return "baby";
 }
 
+// Doubles as the pet's displayed title/rank.
 export const EVOLUTION_STAGE_LABELS: Record<EvolutionStage, string> = {
   baby: "Детёныш",
-  adult: "Взрослый",
-  elder: "Матёрый",
-  ascended: "Вознёсшийся",
+  novice: "Новичок",
+  wanderer: "Странник",
+  veteran: "Ветеран",
+  champion: "Чемпион",
+  master: "Мастер",
+  legend: "Легенда",
 };

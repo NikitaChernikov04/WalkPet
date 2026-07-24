@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Sparkles } from "lucide-react";
+import { RefreshCw, Sparkles } from "lucide-react";
 
 export default function AvatarGenerator({
   status,
@@ -19,7 +19,16 @@ export default function AvatarGenerator({
     );
   }
 
-  if (status === "completed") return null;
+  // No free-form re-description here on purpose — this only resyncs the art to whatever
+  // gear the pet's current rarity/evolution stage should have (useful if the avatar predates
+  // a gear-system change, or just looks stale), not "make up a brand new random costume".
+  if (status === "completed") {
+    return (
+      <button type="button" className="avatar-sync-btn" onClick={() => onGenerate("")}>
+        <RefreshCw size={14} /> Обновить экипировку
+      </button>
+    );
+  }
 
   return (
     <form
