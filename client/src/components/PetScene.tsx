@@ -46,7 +46,7 @@ export default function PetScene({
     bounce();
   };
 
-  // Every time new steps arrive from the pedometer/debug controls, make the pet
+  // Every time new steps arrive from Google Fit/debug controls, make the pet
   // visibly react — this is what ties "walking" to "the pet is alive" for the player.
   useEffect(() => {
     if (isFirstRun.current) {

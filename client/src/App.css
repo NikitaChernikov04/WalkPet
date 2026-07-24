@@ -111,6 +111,43 @@ body {
   margin: 8px 0 4px;
 }
 
+.rarity-badge {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding: 3px 10px;
+  border-radius: 999px;
+  margin: 0 0 10px;
+  text-transform: uppercase;
+}
+
+.rarity-common {
+  background: rgba(180, 180, 190, 0.2);
+  color: #c7c7d1;
+}
+
+.rarity-uncommon {
+  background: rgba(88, 200, 130, 0.18);
+  color: #6fe0a0;
+}
+
+.rarity-rare {
+  background: rgba(66, 150, 255, 0.2);
+  color: #6fb2ff;
+}
+
+.rarity-epic {
+  background: rgba(190, 90, 255, 0.22);
+  color: #cd8fff;
+}
+
+.rarity-legendary {
+  background: linear-gradient(90deg, rgba(255, 195, 60, 0.28), rgba(255, 110, 190, 0.28));
+  color: #ffd27a;
+  box-shadow: 0 0 12px rgba(255, 195, 60, 0.35);
+}
+
 /* --- Scene (pet / egg stage) --- */
 
 .scene {

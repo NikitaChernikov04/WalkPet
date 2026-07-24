@@ -1,8 +1,11 @@
+export type Rarity = "common" | "uncommon" | "rare" | "epic" | "legendary";
+
 export interface Pet {
   id: number;
   user_id: number;
   stage: "egg" | "cracking" | "hatched";
   species: string;
+  rarity: Rarity;
   lifetime_steps: number;
   health: number;
   happiness: number;

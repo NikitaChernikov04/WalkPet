@@ -1,6 +1,7 @@
 import { db, ensureSchema } from "./db.js";
 import { refreshAccessToken } from "./googleFit.js";
-import { buildPetPrompt, startAvatarGeneration } from "./nanobanana.js";
+import { startAvatarGeneration } from "./nanobanana.js";
+import { buildPetPrompt, pickRandomSpecies, randomAvatarFlavor, type Rarity } from "./species.js";
 
 export const EGG_CRACK_STEPS = 3000;
 export const EGG_HATCH_STEPS = 7000;
@@ -17,28 +18,12 @@ type MilestoneKey = keyof typeof MILESTONES;
 const DECAY_PER_INACTIVE_DAY = 5;
 const MAX_DECAY_DAYS = 30;
 
-const AVATAR_FLAVORS = [
-  "космический исследователь в скафандре",
-  "маленький рыцарь в блестящих доспехах",
-  "диджей в неоновых наушниках",
-  "искатель приключений с картой и биноклем",
-  "супергерой в развевающемся плаще",
-  "путешественник во времени в стимпанк-очках",
-  "пиратский капитан в треуголке",
-  "детектив в плаще со шляпой и лупой",
-  "рок-звезда с электрогитарой",
-  "волшебник в мантии со звёздами",
-];
-
-function randomAvatarFlavor(): string {
-  return AVATAR_FLAVORS[Math.floor(Math.random() * AVATAR_FLAVORS.length)];
-}
-
 export interface Pet {
   id: number;
   user_id: number;
   stage: "egg" | "cracking" | "hatched";
   species: string;
+  rarity: Rarity;
   lifetime_steps: number;
   health: number;
   happiness: number;
@@ -85,14 +70,6 @@ export async function getOrCreatePet(userId: number): Promise<Pet> {
   await db.execute({ sql: "INSERT INTO pets (user_id) VALUES (?)", args: [userId] });
   const created = await db.execute({ sql: "SELECT * FROM pets WHERE user_id = ?", args: [userId] });
   return created.rows[0] as unknown as Pet;
-}
-
-function classifySpecies(pet: Pet, activeDays: number): string {
-  if (pet.streak_days >= 30) return "Дракон";
-  const avgDailySteps = activeDays > 0 ? pet.lifetime_steps / activeDays : 0;
-  if (avgDailySteps >= 15000) return "Тигр";
-  if (avgDailySteps >= 7000) return "Волк";
-  return "Ленивый кот";
 }
 
 /** Records today's absolute step count for a user and applies game rules.
@@ -189,21 +166,21 @@ export async function recordSteps(userId: number, stepsToday: number): Promise<P
     justHatched = true;
   }
 
+  // Species and rarity are rolled once, at the exact moment the egg hatches, then stay fixed
+  // for the pet's lifetime — activity no longer reshuffles them on every subsequent sync.
   let species = pet.species;
-  if (stage === "hatched") {
-    const activeDaysRes = await db.execute({
-      sql: "SELECT COUNT(*) as n FROM step_logs WHERE user_id = ? AND steps > 0",
-      args: [userId],
-    });
-    const activeDays = Number((activeDaysRes.rows[0] as unknown as { n: number }).n);
-    species = classifySpecies({ ...pet, lifetime_steps: lifetimeSteps, streak_days: streakDays }, activeDays);
+  let rarity = pet.rarity;
+  if (justHatched) {
+    const picked = pickRandomSpecies();
+    species = picked.species;
+    rarity = picked.rarity;
   }
 
   await db.execute({
-    sql: `UPDATE pets SET stage = ?, species = ?, lifetime_steps = ?, health = ?, happiness = ?,
+    sql: `UPDATE pets SET stage = ?, species = ?, rarity = ?, lifetime_steps = ?, health = ?, happiness = ?,
           intellect = ?, strength = ?, streak_days = ?, last_active_date = ?, hatched_at = ?
           WHERE user_id = ?`,
-    args: [stage, species, lifetimeSteps, health, happiness, intellect, strength, streakDays, date, hatchedAt, userId],
+    args: [stage, species, rarity, lifetimeSteps, health, happiness, intellect, strength, streakDays, date, hatchedAt, userId],
   });
 
   if (justHatched) {
@@ -212,7 +189,7 @@ export async function recordSteps(userId: number, stepsToday: number): Promise<P
     // generate one manually from the pet panel.
     try {
       const description = randomAvatarFlavor();
-      const gen = await startAvatarGeneration(buildPetPrompt(species, description));
+      const gen = await startAvatarGeneration(buildPetPrompt(species, description, rarity));
       await setAvatarPending(userId, gen.id, description);
     } catch {
       // ignore — manual generation remains available
@@ -225,7 +202,7 @@ export async function recordSteps(userId: number, stepsToday: number): Promise<P
 
 /** Debug-only: restores the pet (and today's step log) to a snapshot taken client-side right
  *  before a debug-tap session started, so the "reset" undoes only the manually-tapped steps —
- *  real history from Google Fit or an actual pedometer, captured in that snapshot, is untouched.
+ *  real history from Google Fit, captured in that snapshot, is untouched.
  *  Milestones_applied is recomputed from the restored day-total so a later sync doesn't skip
  *  re-granting a milestone whose stat bonus this restore just undid. */
 export async function restorePetSnapshot(
@@ -255,13 +232,14 @@ export async function restorePetSnapshot(
   }
 
   await db.execute({
-    sql: `UPDATE pets SET stage = ?, species = ?, lifetime_steps = ?, health = ?, happiness = ?,
+    sql: `UPDATE pets SET stage = ?, species = ?, rarity = ?, lifetime_steps = ?, health = ?, happiness = ?,
           intellect = ?, strength = ?, streak_days = ?, last_active_date = ?, hatched_at = ?,
           avatar_url = ?, avatar_status = ?, avatar_generation_id = ?, avatar_description = ?
           WHERE user_id = ?`,
     args: [
       snapshot.stage,
       snapshot.species,
+      snapshot.rarity,
       snapshot.lifetime_steps,
       snapshot.health,
       snapshot.happiness,

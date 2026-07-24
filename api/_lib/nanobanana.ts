@@ -24,17 +24,6 @@ export function avatarUrlFrom(gen: MediaGeneration): string | undefined {
   return gen.data?.[0]?.url;
 }
 
-export function buildPetPrompt(species: string, userDescription: string): string {
-  return (
-    `Cute stylized mobile-game pet character, ${species}, full body visible from head to feet, ` +
-    `either standing upright on two legs like a game mascot or posed naturally on all four legs like ` +
-    `a real animal — pick whichever suits the description best. Dynamic walking pose, flat illustration ` +
-    `style, vibrant colors, centered composition. Background: solid flat single-color chroma-key screen, ` +
-    `pure uniform magenta color rgb(255,0,255), no gradient, no pattern, no texture, no shadow, no other ` +
-    `colors anywhere in the background. Player's custom flavor: ${userDescription}. No text, no watermark.`
-  );
-}
-
 // `async: true` is required to get a trackable job id ("gen_...") back. Without it,
 // a generation that doesn't finish within the request returns a plain UUID id that
 // GET /media/{id} can never resolve (always 404s), so polling would be pointless.

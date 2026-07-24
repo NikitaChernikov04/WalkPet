@@ -10,8 +10,8 @@ import {
   syncGoogleFit,
   syncSteps,
   type Pet,
+  type Rarity,
 } from "./lib/api";
-import { requestMotionPermission, startPedometer, type PedometerPermission } from "./lib/pedometer";
 import PetScene from "./components/PetScene";
 import EggScene from "./components/EggScene";
 import StepRing from "./components/StepRing";
@@ -35,6 +35,14 @@ import {
 
 const EGG_CRACK_STEPS = 3000;
 const EGG_HATCH_STEPS = 7000;
+
+const RARITY_LABELS: Record<Rarity, string> = {
+  common: "Обычный",
+  uncommon: "Необычный",
+  rare: "Редкий",
+  epic: "Эпический",
+  legendary: "Легендарный",
+};
 
 const MILESTONES = [
   { steps: 1000, icon: Apple, label: "Еда", toast: "🍎 Питомец поел! +5 здоровья" },
@@ -60,16 +68,15 @@ let toastSeq = 0;
 export default function App() {
   const [pet, setPet] = useState<Pet | null>(null);
   const [todaySteps, setTodaySteps] = useState(0);
-  const [permission, setPermission] = useState<PedometerPermission>("prompt");
   const [error, setError] = useState<string | null>(null);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [stepTick, setStepTick] = useState(0);
   const [googleFitConnected, setGoogleFitConnected] = useState<boolean | null>(null);
   const [showStats, setShowStats] = useState(false);
   const pendingStepsRef = useRef(0);
+  const lastSyncedStepsRef = useRef(0);
   const debugModeRef = useRef(false);
   const preDebugSnapshotRef = useRef<{ pet: Pet; todaySteps: number } | null>(null);
-  const stopPedometerRef = useRef<(() => void) | null>(null);
   const prevTodayStepsRef = useRef(0);
   const prevStageRef = useRef<string | null>(null);
   const currentDateRef = useRef(new Date().toISOString().slice(0, 10));
@@ -88,6 +95,7 @@ export default function App() {
         setPet(pet);
         setTodaySteps(todaySteps);
         pendingStepsRef.current = todaySteps;
+        lastSyncedStepsRef.current = todaySteps;
         prevTodayStepsRef.current = todaySteps;
         prevStageRef.current = pet.stage;
       })
@@ -108,6 +116,7 @@ export default function App() {
           setPet(pet);
           setTodaySteps(todaySteps);
           pendingStepsRef.current = todaySteps;
+          lastSyncedStepsRef.current = todaySteps;
           prevTodayStepsRef.current = todaySteps;
         })
         .catch((e) => setError(String(e)));
@@ -115,9 +124,13 @@ export default function App() {
     return () => clearInterval(interval);
   }, []);
 
-  // Debounced sync: push the running local step count to the server at most twice a second.
+  // Pushes debug-tapped steps to the server. Real step counts come exclusively from Google
+  // Fit (see the sync effect below); this only fires when a debug tap actually changed the
+  // local count, so it stays idle — not fighting Google Fit's numbers — the rest of the time.
   useEffect(() => {
     const interval = setInterval(() => {
+      if (pendingStepsRef.current === lastSyncedStepsRef.current) return;
+      lastSyncedStepsRef.current = pendingStepsRef.current;
       syncSteps(pendingStepsRef.current)
         .then(({ pet, todaySteps }) => {
           setPet(pet);
@@ -146,8 +159,7 @@ export default function App() {
     return () => document.removeEventListener("visibilitychange", onVisible);
   }, []);
 
-  // Google Fit's own step count is the source of truth once connected — sync it in
-  // periodically and let the server's idempotent max() reconcile it with local tracking.
+  // Google Fit is the sole source of real step data once connected — sync it in periodically.
   // Paused during a debug session (see addDebugSteps/handleResetDebug) so real Google Fit
   // data doesn't immediately overwrite a manual test reset.
   useEffect(() => {
@@ -159,6 +171,7 @@ export default function App() {
           setPet(pet);
           setTodaySteps(todaySteps);
           pendingStepsRef.current = todaySteps;
+          lastSyncedStepsRef.current = todaySteps;
         })
         .catch((e) => setError(String(e)));
     };
@@ -191,23 +204,6 @@ export default function App() {
     prevStageRef.current = pet.stage;
   }, [todaySteps, pet]);
 
-  const handleStep = () => {
-    pendingStepsRef.current += 1;
-    setTodaySteps(pendingStepsRef.current);
-    setStepTick((t) => t + 1);
-  };
-
-  const enableTracking = async () => {
-    const result = await requestMotionPermission();
-    setPermission(result);
-    if (result === "granted") {
-      stopPedometerRef.current?.();
-      stopPedometerRef.current = startPedometer(handleStep);
-    }
-  };
-
-  useEffect(() => () => stopPedometerRef.current?.(), []);
-
   // Debug controls are meant to be used without a real device or Google Fit fighting them
   // over the step count, so the first tap of a session snapshots the pre-tap state (to
   // restore later) and pauses the Google Fit auto-sync until the reset below resumes it.
@@ -222,7 +218,7 @@ export default function App() {
   };
 
   // Restores exactly the pre-debug-session snapshot — undoing only what the debug buttons
-  // added, never touching real Google Fit / pedometer history that came in before or after.
+  // added, never touching real Google Fit history that came in before or after.
   const handleResetDebug = () => {
     const snapshot = preDebugSnapshotRef.current;
     if (!snapshot) {
@@ -233,10 +229,12 @@ export default function App() {
     // back) so a debounced sync tick firing mid-request can't resend the stale pre-reset
     // total and have the server's idempotent max() restore it.
     pendingStepsRef.current = snapshot.todaySteps;
+    lastSyncedStepsRef.current = snapshot.todaySteps;
     setTodaySteps(snapshot.todaySteps);
     restoreDebugSnapshot(snapshot.pet, snapshot.todaySteps)
       .then(({ pet, todaySteps }) => {
         pendingStepsRef.current = todaySteps;
+        lastSyncedStepsRef.current = todaySteps;
         setPet(pet);
         setTodaySteps(todaySteps);
         preDebugSnapshotRef.current = null;
@@ -298,7 +296,7 @@ export default function App() {
       ) : (
         <>
           {pet.stage !== "hatched" && (
-            <EggPanel pet={pet} onEnableTracking={enableTracking} permission={permission} />
+            <EggPanel pet={pet} googleFitConnected={googleFitConnected} onConnectGoogleFit={handleConnectGoogleFit} />
           )}
 
           {pet.stage === "hatched" && (
@@ -329,12 +327,12 @@ export default function App() {
 
 function EggPanel({
   pet,
-  onEnableTracking,
-  permission,
+  googleFitConnected,
+  onConnectGoogleFit,
 }: {
   pet: Pet;
-  onEnableTracking: () => void;
-  permission: PedometerPermission;
+  googleFitConnected: boolean | null;
+  onConnectGoogleFit: () => void;
 }) {
   const target = pet.stage === "egg" ? EGG_CRACK_STEPS : EGG_HATCH_STEPS;
   const progress = Math.min(100, (pet.lifetime_steps / target) * 100);
@@ -350,8 +348,8 @@ function EggPanel({
       <p className="egg-progress">
         {pet.lifetime_steps.toLocaleString("ru-RU")} / {target.toLocaleString("ru-RU")} шагов
       </p>
-      {permission !== "granted" && (
-        <button onClick={onEnableTracking}>Разрешить отслеживание шагов</button>
+      {googleFitConnected === false && (
+        <button onClick={onConnectGoogleFit}>Подключить Google Fit</button>
       )}
     </div>
   );
@@ -387,6 +385,7 @@ function PetPanel({
       </div>
 
       <h2>{pet.species}</h2>
+      <span className={`rarity-badge rarity-${pet.rarity}`}>{RARITY_LABELS[pet.rarity]}</span>
       <AvatarGenerator status={pet.avatar_status} onGenerate={onGenerateAvatar} />
 
       <div className="steps-hero">

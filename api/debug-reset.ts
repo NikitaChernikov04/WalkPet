@@ -2,10 +2,12 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { z } from "zod";
 import { getTodaySteps, restorePetSnapshot, upsertUser } from "./_lib/pet-logic.js";
 import { resolveTelegramUser } from "./_lib/telegram.js";
+import { RARITY_ORDER, type Rarity } from "./_lib/species.js";
 
 const petSnapshotSchema = z.object({
   stage: z.enum(["egg", "cracking", "hatched"]),
   species: z.string(),
+  rarity: z.enum(RARITY_ORDER as [Rarity, ...Rarity[]]),
   lifetime_steps: z.number().int().min(0),
   health: z.number().int().min(0).max(100),
   happiness: z.number().int().min(0).max(100),
