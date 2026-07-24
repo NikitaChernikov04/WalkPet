@@ -14,7 +14,13 @@ import {
   type Pet,
   type Rarity,
 } from "./lib/api";
-import { evolutionStageForLevel, EVOLUTION_STAGE_LABELS, levelProgress } from "./lib/leveling";
+import {
+  evolutionStageForLevel,
+  EVOLUTION_STAGE_LABELS,
+  levelProgress,
+  statCapForLevel,
+  statXpMultiplier,
+} from "./lib/leveling";
 import PetScene from "./components/PetScene";
 import EggScene from "./components/EggScene";
 import StepRing from "./components/StepRing";
@@ -47,6 +53,23 @@ const RARITY_LABELS: Record<Rarity, string> = {
   rare: "Редкий",
   epic: "Эпический",
   legendary: "Легендарный",
+};
+
+// Mirrors RARITY_STAT_CAP_BONUS / RARITY_DECAY_RESISTANCE in api/_lib/species.ts.
+const RARITY_STAT_CAP_BONUS: Record<Rarity, number> = {
+  common: 0,
+  uncommon: 5,
+  rare: 12,
+  epic: 22,
+  legendary: 40,
+};
+
+const RARITY_DECAY_RESISTANCE: Record<Rarity, number> = {
+  common: 1,
+  uncommon: 0.85,
+  rare: 0.7,
+  epic: 0.55,
+  legendary: 0.35,
 };
 
 const MILESTONES = [
@@ -434,11 +457,13 @@ function PetPanel({
   onGenerateAiName: () => Promise<void>;
   onSetCustomName: (name: string) => Promise<void>;
 }) {
-  const statCap = 100 + pet.level * 2;
-  const postHatchSteps = Math.max(0, pet.lifetime_steps - EGG_HATCH_STEPS);
-  const { into, span } = levelProgress(postHatchSteps, pet.level);
+  const statCap = statCapForLevel(pet.level) + RARITY_STAT_CAP_BONUS[pet.rarity];
+  const { into, span } = levelProgress(pet.xp, pet.level);
   const levelPct = span > 0 ? Math.min(100, (into / span) * 100) : 100;
   const evolutionStage = evolutionStageForLevel(pet.level);
+  const avgStat = (pet.health + pet.happiness + pet.intellect + pet.strength) / 4;
+  const xpMultiplier = statXpMultiplier(avgStat, statCap);
+  const decayResistance = RARITY_DECAY_RESISTANCE[pet.rarity];
 
   return (
     <div className="panel">
@@ -459,16 +484,19 @@ function PetPanel({
       <h2>{pet.name ?? pet.species}</h2>
       {pet.name && <p className="pet-species-sub">{pet.species}</p>}
       <span className={`rarity-badge rarity-${pet.rarity}`}>{RARITY_LABELS[pet.rarity]}</span>
+      <p className="rarity-effect">
+        потолок характеристик +{RARITY_STAT_CAP_BONUS[pet.rarity]} · угасание ×{decayResistance.toFixed(2)}
+      </p>
 
       <div className="level-block">
         <span className="level-label">
-          Ур. {pet.level} · {EVOLUTION_STAGE_LABELS[evolutionStage]}
+          Ур. {pet.level} · {EVOLUTION_STAGE_LABELS[evolutionStage]} · ×{xpMultiplier.toFixed(2)} к опыту
         </span>
         <div className="stat-track level-track">
           <div className="stat-fill" style={{ width: `${levelPct}%` }} />
         </div>
         <span className="level-progress-text">
-          {into.toLocaleString("ru-RU")} / {span.toLocaleString("ru-RU")} шагов до след. уровня
+          {into.toLocaleString("ru-RU")} / {span.toLocaleString("ru-RU")} опыта до след. уровня
         </span>
       </div>
 

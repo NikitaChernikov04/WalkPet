@@ -27,6 +27,26 @@ const RARITY_WEIGHTS: Record<Rarity, number> = {
   legendary: 1,
 };
 
+// Rarity isn't just cosmetic: it permanently raises how high a pet's stats can ever go
+// (added on top of the level-based cap, see statCapForLevel in leveling.ts)...
+export const RARITY_STAT_CAP_BONUS: Record<Rarity, number> = {
+  common: 0,
+  uncommon: 5,
+  rare: 12,
+  epic: 22,
+  legendary: 40,
+};
+
+// ...and makes a pet hardier — inactivity decay is scaled down by this factor, so a
+// legendary pet fades much more slowly than a common one when neglected.
+export const RARITY_DECAY_RESISTANCE: Record<Rarity, number> = {
+  common: 1,
+  uncommon: 0.85,
+  rare: 0.7,
+  epic: 0.55,
+  legendary: 0.35,
+};
+
 // Every real-world (and, for the top two tiers, mythical) animal a pet can hatch as, grouped
 // by the rarity tier it belongs to. Picked uniformly at random within the rolled tier.
 const SPECIES_BY_RARITY: Record<Rarity, string[]> = {

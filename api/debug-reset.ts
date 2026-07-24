@@ -9,6 +9,7 @@ const petSnapshotSchema = z.object({
   species: z.string(),
   rarity: z.enum(RARITY_ORDER as [Rarity, ...Rarity[]]),
   level: z.number().int().min(0),
+  xp: z.number().int().min(0),
   name: z.string().nullable(),
   lifetime_steps: z.number().int().min(0),
   // Stat ceiling grows with level (see statCapForLevel), so this is a generous sanity bound

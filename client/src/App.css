@@ -17,6 +17,10 @@
 
   --brass: #c99a44;
   --brass-bright: #e0b25c;
+  /* Brass reads well on the dark ink canvas (~7:1) but is too close in value to
+     parchment (~2:1) to use as text/icon color there — bronze is the same "metal
+     instrument" accent, darkened enough to stay legible on parchment surfaces. */
+  --bronze: #6b4a17;
   --moss: #6b8f5d;
   --moss-bright: #86ac76;
   --rust: #b8532e;
@@ -371,6 +375,14 @@ body {
   background: radial-gradient(circle at 35% 30%, #f3d488, var(--brass) 72%);
 }
 
+.rarity-effect {
+  margin: -6px 0 12px;
+  font-family: "Space Mono", monospace;
+  font-size: 0.62rem;
+  letter-spacing: 0.02em;
+  opacity: 0.5;
+}
+
 /* --- Scene (pet / egg stage) --- */
 
 .scene-frame {
@@ -400,7 +412,7 @@ body {
   position: relative;
   height: 246px;
   border-radius: 3px;
-  background: linear-gradient(180deg, #362a53 0%, #241a3d 72%, #191029 100%);
+  background: linear-gradient(180deg, var(--dusk) 0%, var(--dusk-deep) 55%, var(--ink) 100%);
   overflow: hidden;
   cursor: pointer;
   user-select: none;
@@ -540,18 +552,18 @@ body {
   gap: 4px;
   font-family: "Space Mono", monospace;
   font-size: 0.6rem;
-  color: var(--parchment);
+  color: var(--parchment-ink);
   opacity: 0.85;
 }
 
 .stat-chip svg {
-  color: var(--brass);
+  color: var(--bronze);
 }
 
 .stat-chip-track {
   width: 5px;
   height: 44px;
-  background: rgba(237, 225, 196, 0.14);
+  background: rgba(43, 32, 19, 0.13);
   border-radius: 999px;
   display: flex;
   align-items: flex-end;
@@ -560,7 +572,7 @@ body {
 
 .stat-chip-fill {
   width: 100%;
-  background: linear-gradient(180deg, var(--brass-bright), var(--rust));
+  background: linear-gradient(180deg, var(--bronze), var(--rust));
   border-radius: 999px;
   transition: height 0.5s ease;
 }
@@ -577,7 +589,7 @@ body {
 
 .stat-fill {
   height: 100%;
-  background-image: repeating-linear-gradient(90deg, var(--brass) 0 5px, transparent 5px 10px);
+  background-image: repeating-linear-gradient(90deg, var(--bronze) 0 5px, transparent 5px 10px);
   transition: width 0.5s ease;
   position: relative;
 }
@@ -591,8 +603,8 @@ body {
   width: 9px;
   height: 9px;
   border-radius: 50%;
-  background: var(--brass);
-  box-shadow: 0 0 0 3px rgba(201, 154, 68, 0.25);
+  background: var(--bronze);
+  box-shadow: 0 0 0 3px rgba(107, 74, 23, 0.25);
 }
 
 .panel > .stat-track {
@@ -638,7 +650,7 @@ body {
 
 .compass-dir {
   font-family: "Space Mono", monospace;
-  fill: var(--brass);
+  fill: var(--bronze);
   font-weight: 700;
 }
 
@@ -650,7 +662,7 @@ body {
 
 .ring-progress {
   fill: none;
-  stroke: var(--brass);
+  stroke: var(--bronze);
   stroke-width: 3;
   stroke-linecap: round;
   transition: stroke-dashoffset 0.5s ease;
@@ -829,7 +841,7 @@ body {
 }
 
 .stats-header h2 svg {
-  color: var(--brass);
+  color: var(--bronze);
 }
 
 .stats-close-btn {
@@ -893,7 +905,7 @@ body {
 }
 
 .stats-month-nav button:hover {
-  border-color: var(--brass);
+  border-color: var(--bronze);
   background: transparent;
 }
 
@@ -958,10 +970,10 @@ body {
 
 .stats-bar-fill {
   width: 100%;
-  background: var(--brass);
+  background: var(--bronze);
   border-radius: 1px 1px 0 0;
   transition: height 0.3s ease, opacity 0.2s ease;
-  opacity: 0.55;
+  opacity: 0.65;
 }
 
 .stats-bar-col.active .stats-bar-fill {
@@ -1077,7 +1089,7 @@ body {
 }
 
 .modal-icon {
-  color: var(--brass);
+  color: var(--bronze);
   margin-bottom: 8px;
 }
 
@@ -1146,9 +1158,9 @@ body {
 }
 
 .modal-install-links button:hover {
-  border-color: var(--brass);
+  border-color: var(--bronze);
   background: transparent;
-  color: var(--brass);
+  color: var(--bronze);
 }
 
 /* --- Buttons / debug --- */
@@ -1160,12 +1172,13 @@ button {
   letter-spacing: 0.01em;
   padding: 10px 16px;
   border-radius: 3px;
-  border: none;
+  border: 1px solid rgba(43, 32, 19, 0.3);
   background: var(--brass);
   color: var(--ink);
   margin: 4px;
   cursor: pointer;
   transition: background 0.15s ease;
+  box-shadow: 0 2px 5px rgba(43, 32, 19, 0.25);
 }
 
 button:hover {

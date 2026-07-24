@@ -1,15 +1,25 @@
 // Mirrors api/_lib/leveling.ts — duplicated here since client and server are separate
-// packages. Keep the LEVEL_STEP_BASE and evolution thresholds in sync with the server.
-const LEVEL_STEP_BASE = 2000;
+// packages. Keep LEVEL_XP_BASE, statCapForLevel, statXpMultiplier and the evolution
+// thresholds in sync with the server.
+const LEVEL_XP_BASE = 2000;
 
-export function stepsForLevel(level: number): number {
-  return (LEVEL_STEP_BASE * level * (level + 1)) / 2;
+export function xpForLevel(level: number): number {
+  return (LEVEL_XP_BASE * level * (level + 1)) / 2;
 }
 
-export function levelProgress(postHatchSteps: number, level: number): { into: number; span: number } {
-  const floor = stepsForLevel(level);
-  const ceiling = stepsForLevel(level + 1);
-  return { into: postHatchSteps - floor, span: ceiling - floor };
+export function levelProgress(xp: number, level: number): { into: number; span: number } {
+  const floor = xpForLevel(level);
+  const ceiling = xpForLevel(level + 1);
+  return { into: xp - floor, span: ceiling - floor };
+}
+
+export function statCapForLevel(level: number): number {
+  return 100 + level * 2;
+}
+
+export function statXpMultiplier(avgStat: number, statCap: number): number {
+  const ratio = statCap > 0 ? Math.max(0, Math.min(1, avgStat / statCap)) : 0;
+  return 0.7 + ratio * 0.6;
 }
 
 export type EvolutionStage = "baby" | "adult" | "elder" | "ascended";

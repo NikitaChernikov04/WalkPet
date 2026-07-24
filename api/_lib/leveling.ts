@@ -1,30 +1,42 @@
-// Level grows from steps walked *after* hatching (pre-hatch egg steps don't count), on a
-// triangular curve: reaching level L needs a cumulative LEVEL_STEP_BASE * L * (L+1) / 2
-// post-hatch steps. That gives quick early levels (L1 at 2000 steps) and a steadily steeper
-// climb later (L10 at 110,000; L20 at 420,000) — a believable long-term walking goal.
-const LEVEL_STEP_BASE = 2000;
+// Level grows from XP earned *after* hatching (pre-hatch egg steps don't count), on a
+// triangular curve: reaching level L needs a cumulative LEVEL_XP_BASE * L * (L+1) / 2 XP.
+// That gives quick early levels (L1 at 2000 XP) and a steadily steeper climb later (L10 at
+// 110,000; L20 at 420,000) — a believable long-term walking goal. XP isn't a 1:1 mirror of
+// steps walked: see statXpMultiplier below — how well-kept the pet is scales how much XP
+// each step is actually worth, so the stat bars aren't just decorative.
+const LEVEL_XP_BASE = 2000;
 
-export function stepsForLevel(level: number): number {
-  return (LEVEL_STEP_BASE * level * (level + 1)) / 2;
+export function xpForLevel(level: number): number {
+  return (LEVEL_XP_BASE * level * (level + 1)) / 2;
 }
 
-export function levelForPostHatchSteps(postHatchSteps: number): number {
-  if (postHatchSteps <= 0) return 0;
-  const target = (2 * postHatchSteps) / LEVEL_STEP_BASE;
+export function levelForXp(xp: number): number {
+  if (xp <= 0) return 0;
+  const target = (2 * xp) / LEVEL_XP_BASE;
   const level = Math.floor((-1 + Math.sqrt(1 + 4 * target)) / 2);
   return Math.max(0, level);
 }
 
-export function levelProgress(postHatchSteps: number, level: number): { into: number; span: number } {
-  const floor = stepsForLevel(level);
-  const ceiling = stepsForLevel(level + 1);
-  return { into: postHatchSteps - floor, span: ceiling - floor };
+export function levelProgress(xp: number, level: number): { into: number; span: number } {
+  const floor = xpForLevel(level);
+  const ceiling = xpForLevel(level + 1);
+  return { into: xp - floor, span: ceiling - floor };
 }
 
 // Every level permanently raises the stat ceiling a little, so grinding out levels keeps
-// paying off even once health/happiness/etc. would otherwise be capped at 100.
+// paying off even once health/happiness/etc. would otherwise be capped at 100. Rarity adds
+// its own bonus on top of this (see RARITY_STAT_CAP_BONUS in species.ts).
 export function statCapForLevel(level: number): number {
   return 100 + level * 2;
+}
+
+// How well-kept the pet currently is (0..1, its average stat relative to its own cap)
+// scales how efficiently today's steps convert into XP: a neglected pet (stats near 0)
+// converts steps at 70% efficiency, a thriving one (stats near the cap) at 130% — the same
+// walking pays off faster for a pet that's actually being taken care of.
+export function statXpMultiplier(avgStat: number, statCap: number): number {
+  const ratio = statCap > 0 ? Math.max(0, Math.min(1, avgStat / statCap)) : 0;
+  return 0.7 + ratio * 0.6;
 }
 
 export type EvolutionStage = "baby" | "adult" | "elder" | "ascended";

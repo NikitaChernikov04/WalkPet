@@ -20,7 +20,16 @@ const ALTER_STATEMENTS = [
   "ALTER TABLE pets ADD COLUMN name TEXT",
   "ALTER TABLE pets ADD COLUMN avatar_seed INTEGER",
   "ALTER TABLE pets ADD COLUMN avatar_source_url TEXT",
+  "ALTER TABLE pets ADD COLUMN xp INTEGER NOT NULL DEFAULT 0",
 ];
+
+// One-time backfill for pets that hatched before XP existed: grandfather their historical
+// post-hatch steps in as XP at face value (1:1), since we can't retroactively know their
+// day-by-day stat multiplier. Self-limiting via `xp = 0` — a no-op once a pet has any real
+// XP, so it's safe to run on every cold start rather than needing separate migration
+// bookkeeping. 7000 mirrors EGG_HATCH_STEPS in pet-logic.ts — keep them in sync.
+const XP_BACKFILL_SQL =
+  "UPDATE pets SET xp = lifetime_steps - 7000 WHERE xp = 0 AND lifetime_steps > 7000";
 
 // Serverless cold starts call this on every fresh instance; cheap and idempotent.
 export function ensureSchema(): Promise<void> {
@@ -41,6 +50,7 @@ export function ensureSchema(): Promise<void> {
             species TEXT NOT NULL DEFAULT 'unknown',
             rarity TEXT NOT NULL DEFAULT 'common',
             level INTEGER NOT NULL DEFAULT 0,
+            xp INTEGER NOT NULL DEFAULT 0,
             name TEXT,
             avatar_seed INTEGER,
             avatar_source_url TEXT,
@@ -76,6 +86,8 @@ export function ensureSchema(): Promise<void> {
           if (!(err instanceof Error) || !/duplicate column/i.test(err.message)) throw err;
         }
       }
+
+      await db.execute(XP_BACKFILL_SQL);
     })();
   }
   return migrated;

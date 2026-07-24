@@ -1,8 +1,15 @@
 import { db, ensureSchema } from "./db.js";
 import { refreshAccessToken } from "./googleFit.js";
 import { startAvatarGeneration } from "./nanobanana.js";
-import { buildEvolutionEditPrompt, buildPetPrompt, pickRandomSpecies, type Rarity } from "./species.js";
-import { evolutionStageForLevel, levelForPostHatchSteps, statCapForLevel } from "./leveling.js";
+import {
+  buildEvolutionEditPrompt,
+  buildPetPrompt,
+  pickRandomSpecies,
+  RARITY_DECAY_RESISTANCE,
+  RARITY_STAT_CAP_BONUS,
+  type Rarity,
+} from "./species.js";
+import { evolutionStageForLevel, levelForXp, statCapForLevel, statXpMultiplier } from "./leveling.js";
 
 export const EGG_CRACK_STEPS = 3000;
 export const EGG_HATCH_STEPS = 7000;
@@ -26,6 +33,7 @@ export interface Pet {
   species: string;
   rarity: Rarity;
   level: number;
+  xp: number;
   name: string | null;
   lifetime_steps: number;
   health: number;
@@ -106,14 +114,22 @@ export async function recordSteps(userId: number, stepsToday: number): Promise<P
   }
 
   const pet = await getOrCreatePet(userId);
-  let { health, happiness, intellect, strength, lifetime_steps: lifetimeSteps } = pet;
-  lifetimeSteps += delta;
+  let { health, happiness, intellect, strength } = pet;
+  const lifetimeSteps = pet.lifetime_steps + delta;
 
-  // Level grows from steps walked since hatching; every level raises the stat ceiling a
-  // little, so this has to be known before any stat gets clamped below.
-  const postHatchSteps = Math.max(0, lifetimeSteps - EGG_HATCH_STEPS);
-  const level = levelForPostHatchSteps(postHatchSteps);
-  const statCap = statCapForLevel(level);
+  // XP only accrues from steps walked *after* hatching, and only for the portion of today's
+  // delta earned post-hatch (handles the day hatching itself happens mid-update). How well
+  // the pet is currently cared for (its average stat vs. its own cap) scales the conversion —
+  // this is what ties the stat bars to something real instead of being purely decorative.
+  const postHatchDelta = Math.max(0, lifetimeSteps - Math.max(EGG_HATCH_STEPS, pet.lifetime_steps));
+  const oldStatCap = statCapForLevel(pet.level) + RARITY_STAT_CAP_BONUS[pet.rarity];
+  const avgStat = (health + happiness + intellect + strength) / 4;
+  const multiplier = statXpMultiplier(avgStat, oldStatCap);
+  const xp = pet.xp + Math.round(postHatchDelta * multiplier);
+  const level = levelForXp(xp);
+  // Rarity permanently raises the stat ceiling on top of the level-based one, so a rarer
+  // pet's care bars simply go further — this is what ties rarity to something real too.
+  const statCap = statCapForLevel(level) + RARITY_STAT_CAP_BONUS[pet.rarity];
 
   // Streak bookkeeping, plus a tamagotchi-style stat decay for each fully inactive day since
   // this player was last seen — only computed once, the first time we see a new calendar day.
@@ -137,7 +153,7 @@ export async function recordSteps(userId: number, stepsToday: number): Promise<P
     inactiveDays = Math.min(inactiveDays, MAX_DECAY_DAYS);
 
     if (inactiveDays > 0) {
-      const decay = DECAY_PER_INACTIVE_DAY * inactiveDays;
+      const decay = Math.round(DECAY_PER_INACTIVE_DAY * inactiveDays * RARITY_DECAY_RESISTANCE[pet.rarity]);
       health = clamp(health - decay, statCap);
       happiness = clamp(happiness - decay, statCap);
       intellect = clamp(intellect - decay, statCap);
@@ -191,10 +207,10 @@ export async function recordSteps(userId: number, stepsToday: number): Promise<P
   const evolved = !justHatched && evolutionStageForLevel(pet.level) !== evolutionStage;
 
   await db.execute({
-    sql: `UPDATE pets SET stage = ?, species = ?, rarity = ?, level = ?, lifetime_steps = ?, health = ?, happiness = ?,
+    sql: `UPDATE pets SET stage = ?, species = ?, rarity = ?, level = ?, xp = ?, lifetime_steps = ?, health = ?, happiness = ?,
           intellect = ?, strength = ?, streak_days = ?, last_active_date = ?, hatched_at = ?
           WHERE user_id = ?`,
-    args: [stage, species, rarity, level, lifetimeSteps, health, happiness, intellect, strength, streakDays, date, hatchedAt, userId],
+    args: [stage, species, rarity, level, xp, lifetimeSteps, health, happiness, intellect, strength, streakDays, date, hatchedAt, userId],
   });
 
   if (justHatched) {
@@ -265,7 +281,7 @@ export async function restorePetSnapshot(
   }
 
   await db.execute({
-    sql: `UPDATE pets SET stage = ?, species = ?, rarity = ?, level = ?, name = ?, lifetime_steps = ?, health = ?, happiness = ?,
+    sql: `UPDATE pets SET stage = ?, species = ?, rarity = ?, level = ?, xp = ?, name = ?, lifetime_steps = ?, health = ?, happiness = ?,
           intellect = ?, strength = ?, streak_days = ?, last_active_date = ?, hatched_at = ?,
           avatar_url = ?, avatar_status = ?, avatar_generation_id = ?, avatar_description = ?, avatar_seed = ?, avatar_source_url = ?
           WHERE user_id = ?`,
@@ -274,6 +290,7 @@ export async function restorePetSnapshot(
       snapshot.species,
       snapshot.rarity,
       snapshot.level,
+      snapshot.xp,
       snapshot.name,
       snapshot.lifetime_steps,
       snapshot.health,

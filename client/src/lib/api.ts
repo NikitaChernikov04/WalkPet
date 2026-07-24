@@ -7,6 +7,7 @@ export interface Pet {
   species: string;
   rarity: Rarity;
   level: number;
+  xp: number;
   name: string | null;
   lifetime_steps: number;
   health: number;
