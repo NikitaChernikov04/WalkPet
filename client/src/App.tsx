@@ -11,6 +11,7 @@ import {
   startGoogleFitAuth,
   syncGoogleFit,
   type Pet,
+  type PetSync,
   type Rarity,
 } from "./lib/api";
 import { localDateString, msUntilLocalMidnight } from "./lib/day";
@@ -128,8 +129,10 @@ export default function App() {
     setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 2500);
   };
 
-  const applyState = useCallback((next: { pet: Pet; todaySteps: number }, resetBaselines = false) => {
-    setPet(next.pet);
+  const applyState = useCallback((next: { pet: PetSync; todaySteps: number }, resetBaselines = false) => {
+    // Spread-merge, so a payload that omits `avatar_url` (every sync — it's a 200KB data URL)
+    // leaves the current image in place, while an explicit null (a reset) still clears it.
+    setPet((prev) => (prev ? { ...prev, ...next.pet } : (next.pet as Pet)));
     setTodaySteps(next.todaySteps);
     if (next.todaySteps > lastKnownStepsRef.current) setStepTick((t) => t + 1);
     lastKnownStepsRef.current = next.todaySteps;

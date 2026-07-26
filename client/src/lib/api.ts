@@ -33,6 +33,17 @@ export interface PetState {
   todaySteps: number;
 }
 
+/** A sync response deliberately leaves out `avatar_url` — it's a ~200KB base64 PNG and shipping
+ *  it three times a minute was the single biggest cost in the sync. The key is absent rather
+ *  than null, so merging the payload over the current pet keeps the image on screen; a new one
+ *  arrives through the avatar poll. Reset does send an explicit null, which correctly clears it. */
+export type PetSync = Omit<Pet, "avatar_url"> & { avatar_url?: string | null };
+
+export interface SyncState {
+  pet: PetSync;
+  todaySteps: number;
+}
+
 /** The device's current UTC offset in minutes east of UTC (Moscow → 180). Sent on every request
  *  so the server runs the player's day — step ring, milestones, streaks — on their local
  *  midnight. Recomputed per request, so DST changes and travel are handled without any setup. */
@@ -101,7 +112,7 @@ export async function startGoogleFitAuth(): Promise<{ url: string }> {
   return res.json();
 }
 
-export async function syncGoogleFit(): Promise<PetState> {
+export async function syncGoogleFit(): Promise<SyncState> {
   const res = await fetch("/api/google-fit", { method: "POST", headers: { ...initDataHeader() } });
   if (!res.ok) throw new Error(`POST /api/google-fit failed: ${res.status}`);
   return res.json();

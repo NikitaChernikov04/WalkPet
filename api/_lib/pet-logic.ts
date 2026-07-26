@@ -73,6 +73,22 @@ export interface PetState {
   todaySteps: number;
 }
 
+/** `avatar_url` holds a ~200KB base64 PNG data URL. Pulling it out of the DB and shipping it to
+ *  the client on every 20-second sync dominated sync latency — a plain `SELECT *` on this table
+ *  measured ~1000ms against ~250ms for the same row without the artwork. Syncs therefore work
+ *  with this narrower shape; the client already has the image and keeps showing it, and picks up
+ *  a new one through the avatar poll (which fires whenever avatar_status goes to "pending"). */
+export type PetWithoutArt = Omit<Pet, "avatar_url">;
+
+export interface SyncState {
+  pet: PetWithoutArt;
+  todaySteps: number;
+}
+
+const PET_COLUMNS_WITHOUT_ART = `id, user_id, stage, species, rarity, level, xp, name, lifetime_steps, health, happiness,
+  intellect, strength, streak_days, last_active_date, hatched_at, created_at, avatar_status, avatar_generation_id,
+  avatar_description, avatar_seed, avatar_source_url, avatar_stage, avatar_target_stage`;
+
 const clamp = (n: number, max = 100) => Math.max(0, Math.min(max, n));
 
 /** Everything below works on the *player's* calendar day (see _lib/tz.ts): the step ring, the
@@ -161,21 +177,21 @@ export async function getOrCreatePet(userId: number): Promise<Pet> {
  *  This is the hot path — it runs on every 20-second sync — so it reads everything it needs in
  *  one batched round trip, writes at most one more, and short-circuits entirely when a sync
  *  brings nothing new (which is most of them). */
-export async function recordSteps(userId: number, stepsToday: number, tzOffset: number): Promise<PetState> {
+export async function recordSteps(userId: number, stepsToday: number, tzOffset: number): Promise<SyncState> {
   await ensureSchema();
   const date = localDate(tzOffset);
   const prevDate = shiftDate(date, -1);
 
   const [petRes, todayRes, prevRes] = await db.batch(
     [
-      { sql: "SELECT * FROM pets WHERE user_id = ?", args: [userId] },
+      { sql: `SELECT ${PET_COLUMNS_WITHOUT_ART} FROM pets WHERE user_id = ?`, args: [userId] },
       { sql: "SELECT steps, milestones_applied FROM step_logs WHERE user_id = ? AND date = ?", args: [userId, date] },
       { sql: "SELECT steps FROM step_logs WHERE user_id = ? AND date = ?", args: [userId, prevDate] },
     ],
     "read",
   );
 
-  const pet = (petRes.rows[0] as unknown as Pet | undefined) ?? (await getOrCreatePet(userId));
+  const pet = (petRes.rows[0] as unknown as PetWithoutArt | undefined) ?? (await getOrCreatePet(userId));
   const row = todayRes.rows[0] as unknown as { steps: number; milestones_applied: string } | undefined;
   const yesterdaySteps = Number((prevRes.rows[0] as unknown as { steps: number } | undefined)?.steps ?? 0);
 
@@ -276,7 +292,7 @@ export async function recordSteps(userId: number, stepsToday: number, tzOffset: 
 
   const evolutionStage = evolutionStageForLevel(level);
 
-  const updatedPet: Pet = {
+  const updatedPet: PetWithoutArt = {
     ...pet,
     stage,
     species,
@@ -344,49 +360,60 @@ export async function recordSteps(userId: number, stepsToday: number, tzOffset: 
  *  missed or failed upgrade is simply retried on the next one. */
 async function syncAvatarToStage(
   userId: number,
-  pet: Pet,
+  pet: PetWithoutArt,
   evolutionStage: EvolutionStage,
   justHatched: boolean,
 ): Promise<void> {
   if (justHatched) {
     // Best-effort: kick off the pet's very first avatar right away so the reveal feels alive —
     // completely bare/unclothed (see EVOLUTION_OUTFIT_PROMPT["baby"]), gear gets earned through
-    // evolution. A random seed is rolled once here and reused on every future evolution edit
-    // for extra visual consistency on top of the image-to-image reference.
+    // evolution. A random seed is rolled once here and reused on every future generation for
+    // extra visual consistency on top of the image-to-image reference.
     try {
       const seed = Math.floor(Math.random() * 2 ** 31);
       const gen = await startAvatarGeneration(buildPetPrompt(pet.species, "", pet.rarity, evolutionStage), { seed });
       await setAvatarPending(userId, gen.id, "", seed, evolutionStage);
       pet.avatar_status = "pending";
-    } catch {
-      // ignore — manual generation remains available
+    } catch (err) {
+      console.error("hatch avatar generation failed", err);
+      // manual generation remains available
     }
     return;
   }
 
-  // Only a finished avatar can be edited into the next tier, and only one job at a time.
-  if (pet.avatar_status !== "completed" || !pet.avatar_source_url) return;
+  // Only a finished avatar can be evolved, and only one job at a time.
+  if (pet.avatar_status !== "completed") return;
 
   // Pets that predate the avatar_stage column have artwork from the hatch generation, i.e. bare.
   const currentArtStage = pet.avatar_stage ?? "baby";
-  const nextStage = nextEvolutionStageToward(currentArtStage, evolutionStage);
-  if (!nextStage) return;
+  if (nextEvolutionStageToward(currentArtStage, evolutionStage) === null) return;
 
-  // Image-to-image edits the pet's EXISTING avatar (the magenta-background source version, not
-  // the transparent display cutout) to add exactly one tier of gear, so it stays recognizably
-  // the same creature instead of rolling a completely different-looking image.
+  // The image-to-image path needs a reference the generation API can actually fetch. Pets
+  // created before this was fixed have a `data:` URI stored there, which the API rejects
+  // outright — for those, redraw from scratch instead of leaving them stuck forever.
+  const reference = pet.avatar_source_url?.startsWith("http") ? pet.avatar_source_url : null;
+
+  // With a usable reference, edit the EXISTING artwork to add exactly one tier of gear, so the
+  // pet stays recognizably the same creature. Without one, generate fresh from the stage's full
+  // cumulative outfit description — which lets it jump straight to the current stage, since that
+  // prompt already describes everything the pet should be wearing by then.
+  const targetStage = reference ? nextEvolutionStageToward(currentArtStage, evolutionStage)! : evolutionStage;
+  const prompt = reference
+    ? buildEvolutionEditPrompt(pet.species, pet.rarity, targetStage)
+    : buildPetPrompt(pet.species, "", pet.rarity, targetStage);
+
   try {
-    const prompt = buildEvolutionEditPrompt(pet.species, pet.rarity, nextStage);
     const gen = await startAvatarGeneration(prompt, {
-      images: [pet.avatar_source_url],
-      strength: 0.35,
+      ...(reference ? { images: [reference], strength: 0.35 } : {}),
       seed: pet.avatar_seed ?? undefined,
     });
-    await setAvatarPending(userId, gen.id, pet.avatar_description ?? "", pet.avatar_seed ?? undefined, nextStage);
+    await setAvatarPending(userId, gen.id, pet.avatar_description ?? "", pet.avatar_seed ?? undefined, targetStage);
     pet.avatar_status = "pending";
-    pet.avatar_target_stage = nextStage;
-  } catch {
-    // ignore — pet keeps its current art and retries on the next sync
+    pet.avatar_target_stage = targetStage;
+  } catch (err) {
+    // Logged rather than swallowed: this failing silently is exactly why evolutions went
+    // unnoticed for so long. The pet keeps its current art and retries on the next sync.
+    console.error(`evolution ${currentArtStage} -> ${targetStage} failed for user ${userId}`, err);
   }
 }
 

@@ -43,6 +43,12 @@ const TABLES = ["users", "pets", "step_logs"];
 // for that pet's next step sync. 7000 mirrors EGG_HATCH_STEPS in pet-logic.ts — keep in sync.
 const XP_RESYNC_SQL = "UPDATE pets SET xp = MAX(0, lifetime_steps - 7000) WHERE xp != MAX(0, lifetime_steps - 7000)";
 
+// `avatar_source_url` exists to be handed back to the image API as an evolution reference, but
+// an older version stored a ~380KB base64 `data:` URI there — which that API rejects outright,
+// so those rows are dead weight that the sync path still had to read. Clearing them frees the
+// hot path and routes those pets through the redraw fallback (see syncAvatarToStage).
+const STRIP_DATA_URI_SQL = "UPDATE pets SET avatar_source_url = NULL WHERE avatar_source_url LIKE 'data:%'";
+
 // Serverless cold starts call this on every fresh instance, and every request awaits it before
 // touching the DB — so its cost is directly on the critical path of a cold sync. It probes the
 // existing shape in ONE round trip and issues DDL only when something is genuinely missing,
@@ -67,7 +73,7 @@ export function ensureSchema(): Promise<void> {
         await createTables();
         // Re-probe so the ALTER pass below sees what the CREATEs already provided.
         const after = await db.batch(
-          TABLES.map((table) => `PRAGMA table_info(${table})`),
+          TABLES.map((table) => `SELECT name FROM pragma_table_info('${table}')`),
           "read",
         );
         TABLES.forEach((table, i) => {
@@ -86,7 +92,10 @@ export function ensureSchema(): Promise<void> {
         }
       }
 
-      if (missing.length > 0) await db.execute(XP_RESYNC_SQL);
+      // Both are no-op UPDATEs once their rows are already correct, and batching keeps them to a
+      // single round trip — cheap enough to run unconditionally so a stale row self-heals on the
+      // next cold start rather than waiting for a schema change to carry the fix.
+      await db.batch([XP_RESYNC_SQL, STRIP_DATA_URI_SQL], "write");
     })();
   }
   return migrated;

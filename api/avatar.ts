@@ -49,9 +49,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (gen.status === "completed" && url) {
       await setAvatarPending(userId, gen.id, description, seed, targetStage);
       try {
-        const { display, source } = await processAvatarImage(url);
-        await completeAvatar(userId, display, source);
-      } catch {
+        // The generated image's own URL is kept as the evolution reference — see completeAvatar.
+        await completeAvatar(userId, await processAvatarImage(url), url);
+      } catch (err) {
+        console.error("avatar processing failed", err);
         await failAvatar(userId);
       }
     } else if (gen.status === "failed" || gen.status === "cancelled") {
@@ -72,8 +73,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const gen = await getAvatarGeneration(pet.avatar_generation_id);
         const url = avatarUrlFrom(gen);
         if (gen.status === "completed" && url) {
-          const { display, source } = await processAvatarImage(url);
-          await completeAvatar(userId, display, source);
+          await completeAvatar(userId, await processAvatarImage(url), url);
           pet = await getOrCreatePet(userId);
         } else if (gen.status === "failed" || gen.status === "cancelled") {
           await failAvatar(userId);

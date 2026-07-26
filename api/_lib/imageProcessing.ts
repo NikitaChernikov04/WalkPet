@@ -118,23 +118,21 @@ function toDataUrl(png: PNG): string {
   return `data:image/png;base64,${PNG.sync.write(png).toString("base64")}`;
 }
 
-/** Fetches a freshly generated (chroma-key background) image once and returns two versions:
- *  `display` — transparent-PNG cutout, ready for `pets.avatar_url` (what the player sees).
- *  `source` — the same image resized but with its original solid magenta background intact,
- *  ready for `pets.avatar_source_url`. Polza's own generated-image URLs are short-lived, so
- *  this is what gets fed back in as the image-to-image reference on a later evolution edit —
- *  the transparent `display` version would confuse the model (and break the next cutout),
- *  since it no longer has the clean chroma-key background the prompt asks for. */
-export async function processAvatarImage(imageUrl: string): Promise<{ display: string; source: string }> {
+/** Fetches a freshly generated (chroma-key background) image and returns the transparent-PNG
+ *  cutout for `pets.avatar_url` — what the player actually sees.
+ *
+ *  This used to also return a second, magenta-background copy as a data URL, stored in
+ *  `avatar_source_url` to serve as the image-to-image reference for a later evolution edit.
+ *  That could never work: the generation API rejects `data:` URIs outright
+ *  ("400 BAD_REQUEST: File type not supported"), so every evolution edit threw and pets simply
+ *  never changed. The reference is now the generated image's own https URL — which the API does
+ *  accept — and that also keeps ~380KB of base64 per pet out of the database. */
+export async function processAvatarImage(imageUrl: string): Promise<string> {
   const res = await fetch(imageUrl);
   if (!res.ok) throw new Error(`failed to fetch generated image: ${res.status} ${imageUrl}`);
   const buf = Buffer.from(await res.arrayBuffer());
 
-  const source = boxDownsample(PNG.sync.read(buf), MAX_DIMENSION);
-
   const cutout = PNG.sync.read(buf);
   cutoutChromaKey(cutout);
-  const display = boxDownsample(cutout, MAX_DIMENSION);
-
-  return { display: toDataUrl(display), source: toDataUrl(source) };
+  return toDataUrl(boxDownsample(cutout, MAX_DIMENSION));
 }
