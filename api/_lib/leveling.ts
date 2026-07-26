@@ -44,21 +44,48 @@ export function statXpMultiplier(avgStat: number, statCap: number): number {
 // leveling curve's own growing cost per level (each tier roughly doubles the XP of the last).
 export type EvolutionStage = "baby" | "novice" | "wanderer" | "veteran" | "champion" | "master" | "legend";
 
-const EVOLUTION_THRESHOLDS: [EvolutionStage, number][] = [
-  ["legend", 48],
-  ["master", 34],
-  ["champion", 24],
-  ["veteran", 16],
-  ["wanderer", 9],
-  ["novice", 4],
-  ["baby", 0],
+// Ordered baby → legend; the index doubles as the tier number for stepping one stage at a time.
+export const EVOLUTION_ORDER: EvolutionStage[] = [
+  "baby",
+  "novice",
+  "wanderer",
+  "veteran",
+  "champion",
+  "master",
+  "legend",
 ];
 
+// The first upgrade used to sit at level 4 (~20k post-hatch steps), so a player several levels
+// in had still never seen their pet change at all — leveling read as a number going up and
+// nothing else. The first two tiers are now within the first few days of real walking, and the
+// rest are pulled in to match.
+const EVOLUTION_MIN_LEVEL: Record<EvolutionStage, number> = {
+  baby: 0,
+  novice: 2,
+  wanderer: 6,
+  veteran: 11,
+  champion: 18,
+  master: 28,
+  legend: 40,
+};
+
 export function evolutionStageForLevel(level: number): EvolutionStage {
-  for (const [stage, minLevel] of EVOLUTION_THRESHOLDS) {
-    if (level >= minLevel) return stage;
+  let stage: EvolutionStage = "baby";
+  for (const candidate of EVOLUTION_ORDER) {
+    if (level >= EVOLUTION_MIN_LEVEL[candidate]) stage = candidate;
   }
-  return "baby";
+  return stage;
+}
+
+/** The single next stage on the way from `from` to `target`, or null when already there.
+ *  Evolution art is applied one tier at a time (each edit only adds that tier's gear delta),
+ *  so a pet whose artwork fell several tiers behind catches up one sync at a time instead of
+ *  skipping straight to the top and silently losing the intermediate gear. */
+export function nextEvolutionStageToward(from: EvolutionStage, target: EvolutionStage): EvolutionStage | null {
+  const fromIndex = EVOLUTION_ORDER.indexOf(from);
+  const targetIndex = EVOLUTION_ORDER.indexOf(target);
+  if (targetIndex <= fromIndex) return null;
+  return EVOLUTION_ORDER[fromIndex + 1];
 }
 
 // Doubles as the pet's displayed title/rank — not just an internal stage key.

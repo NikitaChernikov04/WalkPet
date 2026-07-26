@@ -39,12 +39,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       !description && pet.avatar_status === "completed"
         ? Math.floor(Math.random() * 2 ** 31)
         : (pet.avatar_seed ?? Math.floor(Math.random() * 2 ** 31));
-    const prompt = buildPetPrompt(pet.species, description, pet.rarity, evolutionStageForLevel(pet.level));
+    // A from-scratch generation draws the full outfit for the pet's current stage, so that's the
+    // stage the resulting artwork depicts — recorded so evolution edits know where to resume.
+    const targetStage = evolutionStageForLevel(pet.level);
+    const prompt = buildPetPrompt(pet.species, description, pet.rarity, targetStage);
     const gen = await startAvatarGeneration(prompt, { seed });
     const url = avatarUrlFrom(gen);
 
     if (gen.status === "completed" && url) {
-      await setAvatarPending(userId, gen.id, description, seed);
+      await setAvatarPending(userId, gen.id, description, seed, targetStage);
       try {
         const { display, source } = await processAvatarImage(url);
         await completeAvatar(userId, display, source);
@@ -52,11 +55,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         await failAvatar(userId);
       }
     } else if (gen.status === "failed" || gen.status === "cancelled") {
-      await setAvatarPending(userId, gen.id, description, seed);
+      await setAvatarPending(userId, gen.id, description, seed, targetStage);
       await failAvatar(userId);
     } else {
       // pending/processing: client will poll GET /api/avatar for the result.
-      await setAvatarPending(userId, gen.id, description, seed);
+      await setAvatarPending(userId, gen.id, description, seed, targetStage);
     }
 
     return res.status(200).json({ pet: await getOrCreatePet(userId) });

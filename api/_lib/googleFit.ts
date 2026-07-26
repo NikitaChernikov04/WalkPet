@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { localDayStartMs } from "./tz.js";
 
 const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
@@ -90,11 +91,13 @@ interface AggregateResponse {
   bucket?: { dataset?: { point?: { value?: { intVal?: number }[] }[] }[] }[];
 }
 
-/** Total step count for the given UTC calendar day (matches pet-logic's UTC "today" convention). */
-export async function fetchStepsForDate(accessToken: string, dateISO: string): Promise<number> {
-  const startTimeMillis = new Date(`${dateISO}T00:00:00.000Z`).getTime();
-  const endTimeMillis = startTimeMillis + 24 * 60 * 60 * 1000;
+/** Total step count for the player's *local* calendar day `dateISO`, where `tzOffset` is their
+ *  UTC offset in minutes east of UTC — so the count resets at their own 00:00, matching the
+ *  day boundary pet-logic stores step_logs rows under. */
+export async function fetchStepsForDate(accessToken: string, dateISO: string, tzOffset: number): Promise<number> {
+  const startTimeMillis = localDayStartMs(dateISO, tzOffset);
   const dayMillis = 24 * 60 * 60 * 1000;
+  const endTimeMillis = startTimeMillis + dayMillis;
 
   const res = await fetch(FITNESS_AGGREGATE_URL, {
     method: "POST",

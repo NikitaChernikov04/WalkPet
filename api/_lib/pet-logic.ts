@@ -1,6 +1,8 @@
+import type { InStatement } from "@libsql/client";
 import { db, ensureSchema } from "./db.js";
 import { refreshAccessToken } from "./googleFit.js";
 import { startAvatarGeneration } from "./nanobanana.js";
+import { daysBetween, localDate, shiftDate } from "./tz.js";
 import {
   buildEvolutionEditPrompt,
   buildPetPrompt,
@@ -10,9 +12,11 @@ import {
   type Rarity,
 } from "./species.js";
 import {
+  type EvolutionStage,
   evolutionStageForLevel,
   LEVEL_UP_STAT_BONUS,
   levelForXp,
+  nextEvolutionStageToward,
   statCapForLevel,
   statXpMultiplier,
 } from "./leveling.js";
@@ -60,29 +64,83 @@ export interface Pet {
   avatar_description: string | null;
   avatar_seed: number | null;
   avatar_source_url: string | null;
+  avatar_stage: EvolutionStage | null;
+  avatar_target_stage: EvolutionStage | null;
+}
+
+export interface PetState {
+  pet: Pet;
+  todaySteps: number;
 }
 
 const clamp = (n: number, max = 100) => Math.max(0, Math.min(max, n));
-const today = () => new Date().toISOString().slice(0, 10);
-const yesterday = () => {
-  const d = new Date();
-  d.setUTCDate(d.getUTCDate() - 1);
-  return d.toISOString().slice(0, 10);
-};
 
-export async function upsertUser(telegramId: string, username: string | null): Promise<number> {
+/** Everything below works on the *player's* calendar day (see _lib/tz.ts): the step ring, the
+ *  step_logs row a sync writes to, milestone resets and streaks all roll over at their local
+ *  00:00, not at UTC midnight. `tzOffset` is minutes east of UTC. */
+export interface UserContext {
+  userId: number;
+  tzOffset: number;
+  tokens: GoogleAccountTokens | null;
+}
+
+/** Resolves the caller in a single round trip: their row id, the timezone to run their day on,
+ *  and their Google tokens — the three things nearly every request needs before it can do
+ *  anything. Previously three separate sequential queries against a remote DB. */
+export async function getUserContext(
+  telegramId: string,
+  username: string | null,
+  tzOffsetHint: number | null,
+): Promise<UserContext> {
   await ensureSchema();
   const existing = await db.execute({
-    sql: "SELECT id FROM users WHERE telegram_id = ?",
+    sql: `SELECT id, tz_offset, google_access_token, google_refresh_token, google_token_expiry
+          FROM users WHERE telegram_id = ?`,
     args: [telegramId],
   });
-  if (existing.rows[0]) return Number(existing.rows[0].id);
+  const row = existing.rows[0] as unknown as
+    | {
+        id: number;
+        tz_offset: number | null;
+        google_access_token: string | null;
+        google_refresh_token: string | null;
+        google_token_expiry: number | null;
+      }
+    | undefined;
 
-  const result = await db.execute({
-    sql: "INSERT INTO users (telegram_id, username) VALUES (?, ?)",
-    args: [telegramId, username],
-  });
-  return Number(result.lastInsertRowid);
+  if (!row) {
+    const result = await db.execute({
+      sql: "INSERT INTO users (telegram_id, username, tz_offset) VALUES (?, ?, ?)",
+      args: [telegramId, username, tzOffsetHint ?? 0],
+    });
+    return { userId: Number(result.lastInsertRowid), tzOffset: tzOffsetHint ?? 0, tokens: null };
+  }
+
+  const userId = Number(row.id);
+  const stored = Number(row.tz_offset ?? 0);
+  const tzOffset = tzOffsetHint ?? stored;
+  // Only written when the player actually moved zone (or DST flipped) — normally free.
+  if (tzOffsetHint !== null && tzOffsetHint !== stored) {
+    await db.execute({ sql: "UPDATE users SET tz_offset = ? WHERE id = ?", args: [tzOffsetHint, userId] });
+  }
+
+  const tokens =
+    row.google_access_token && row.google_refresh_token
+      ? {
+          accessToken: row.google_access_token,
+          refreshToken: row.google_refresh_token,
+          expiry: row.google_token_expiry ?? 0,
+        }
+      : null;
+  return { userId, tzOffset, tokens };
+}
+
+export async function upsertUser(
+  telegramId: string,
+  username: string | null,
+  tzOffsetHint: number | null = null,
+): Promise<number> {
+  return (await getUserContext(telegramId, username, tzOffsetHint)).userId;
 }
 
 export async function getOrCreatePet(userId: number): Promise<Pet> {
@@ -96,34 +154,35 @@ export async function getOrCreatePet(userId: number): Promise<Pet> {
 }
 
 /** Records today's absolute step count for a user and applies game rules.
- *  `stepsToday` is the cumulative count for the day (client re-sends the running total,
- *  so we take the max to stay idempotent against retries). */
-export async function recordSteps(userId: number, stepsToday: number): Promise<Pet> {
+ *  `stepsToday` is the cumulative count for the *player's local* day (the client re-sends the
+ *  running total, so we take the max to stay idempotent against retries), and `tzOffset` is what
+ *  defines which local day that is.
+ *
+ *  This is the hot path — it runs on every 20-second sync — so it reads everything it needs in
+ *  one batched round trip, writes at most one more, and short-circuits entirely when a sync
+ *  brings nothing new (which is most of them). */
+export async function recordSteps(userId: number, stepsToday: number, tzOffset: number): Promise<PetState> {
   await ensureSchema();
-  const date = today();
-  const rowRes = await db.execute({
-    sql: "SELECT steps, milestones_applied FROM step_logs WHERE user_id = ? AND date = ?",
-    args: [userId, date],
-  });
-  const row = rowRes.rows[0] as unknown as { steps: number; milestones_applied: string } | undefined;
+  const date = localDate(tzOffset);
+  const prevDate = shiftDate(date, -1);
 
-  const previousSteps = row?.steps ?? 0;
+  const [petRes, todayRes, prevRes] = await db.batch(
+    [
+      { sql: "SELECT * FROM pets WHERE user_id = ?", args: [userId] },
+      { sql: "SELECT steps, milestones_applied FROM step_logs WHERE user_id = ? AND date = ?", args: [userId, date] },
+      { sql: "SELECT steps FROM step_logs WHERE user_id = ? AND date = ?", args: [userId, prevDate] },
+    ],
+    "read",
+  );
+
+  const pet = (petRes.rows[0] as unknown as Pet | undefined) ?? (await getOrCreatePet(userId));
+  const row = todayRes.rows[0] as unknown as { steps: number; milestones_applied: string } | undefined;
+  const yesterdaySteps = Number((prevRes.rows[0] as unknown as { steps: number } | undefined)?.steps ?? 0);
+
+  const previousSteps = Number(row?.steps ?? 0);
   const newSteps = Math.max(previousSteps, stepsToday);
   const delta = newSteps - previousSteps;
 
-  if (row) {
-    await db.execute({
-      sql: "UPDATE step_logs SET steps = ? WHERE user_id = ? AND date = ?",
-      args: [newSteps, userId, date],
-    });
-  } else {
-    await db.execute({
-      sql: "INSERT INTO step_logs (user_id, date, steps) VALUES (?, ?, ?)",
-      args: [userId, date, newSteps],
-    });
-  }
-
-  const pet = await getOrCreatePet(userId);
   let { health, happiness, intellect, strength } = pet;
   const lifetimeSteps = pet.lifetime_steps + delta;
 
@@ -154,19 +213,11 @@ export async function recordSteps(userId: number, stepsToday: number): Promise<P
   // this player was last seen — only computed once, the first time we see a new calendar day.
   let streakDays = pet.streak_days;
   if (pet.last_active_date !== date) {
-    streakDays = pet.last_active_date === yesterday() ? streakDays + 1 : 1;
-
-    const yesterdayRes = await db.execute({
-      sql: "SELECT steps FROM step_logs WHERE user_id = ? AND date = ?",
-      args: [userId, yesterday()],
-    });
-    const yesterdaySteps = Number((yesterdayRes.rows[0] as unknown as { steps: number } | undefined)?.steps ?? 0);
+    streakDays = pet.last_active_date === prevDate ? streakDays + 1 : 1;
 
     let inactiveDays = yesterdaySteps < MILESTONES.food.steps ? 1 : 0;
     if (pet.last_active_date) {
-      const lastActiveMs = new Date(`${pet.last_active_date}T00:00:00.000Z`).getTime();
-      const todayMs = new Date(`${date}T00:00:00.000Z`).getTime();
-      const gapDays = Math.round((todayMs - lastActiveMs) / 86_400_000) - 1;
+      const gapDays = daysBetween(pet.last_active_date, date) - 1;
       inactiveDays += Math.max(0, gapDays);
     }
     inactiveDays = Math.min(inactiveDays, MAX_DECAY_DAYS);
@@ -198,12 +249,6 @@ export async function recordSteps(userId: number, stepsToday: number): Promise<P
       if (milestone.stat === "intellect") intellect = clamp(intellect + gain, statCap);
     }
   }
-  if (appliedNow.size !== appliedBefore.size) {
-    await db.execute({
-      sql: "UPDATE step_logs SET milestones_applied = ? WHERE user_id = ? AND date = ?",
-      args: [[...appliedNow].join(","), userId, date],
-    });
-  }
 
   if (streakDays > 0 && streakDays % 7 === 0 && streakDays !== pet.streak_days) {
     happiness = clamp(happiness + 10, statCap);
@@ -230,49 +275,119 @@ export async function recordSteps(userId: number, stepsToday: number): Promise<P
   }
 
   const evolutionStage = evolutionStageForLevel(level);
-  const evolved = !justHatched && evolutionStageForLevel(pet.level) !== evolutionStage;
 
-  await db.execute({
-    sql: `UPDATE pets SET stage = ?, species = ?, rarity = ?, level = ?, xp = ?, lifetime_steps = ?, health = ?, happiness = ?,
-          intellect = ?, strength = ?, streak_days = ?, last_active_date = ?, hatched_at = ?
-          WHERE user_id = ?`,
-    args: [stage, species, rarity, level, xp, lifetimeSteps, health, happiness, intellect, strength, streakDays, date, hatchedAt, userId],
-  });
+  const updatedPet: Pet = {
+    ...pet,
+    stage,
+    species,
+    rarity,
+    level,
+    xp,
+    lifetime_steps: lifetimeSteps,
+    health,
+    happiness,
+    intellect,
+    strength,
+    streak_days: streakDays,
+    last_active_date: date,
+    hatched_at: hatchedAt,
+  };
 
+  const stepLogChanged = delta > 0 || appliedNow.size !== appliedBefore.size;
+  const petChanged =
+    stage !== pet.stage ||
+    species !== pet.species ||
+    rarity !== pet.rarity ||
+    level !== pet.level ||
+    xp !== pet.xp ||
+    lifetimeSteps !== pet.lifetime_steps ||
+    health !== pet.health ||
+    happiness !== pet.happiness ||
+    intellect !== pet.intellect ||
+    strength !== pet.strength ||
+    streakDays !== pet.streak_days ||
+    date !== pet.last_active_date ||
+    hatchedAt !== pet.hatched_at;
+
+  const writes: InStatement[] = [];
+  if (stepLogChanged) {
+    writes.push({
+      sql: `INSERT INTO step_logs (user_id, date, steps, milestones_applied) VALUES (?, ?, ?, ?)
+            ON CONFLICT(user_id, date) DO UPDATE SET steps = excluded.steps, milestones_applied = excluded.milestones_applied`,
+      args: [userId, date, newSteps, [...appliedNow].join(",")],
+    });
+  }
+  if (petChanged) {
+    writes.push({
+      sql: `UPDATE pets SET stage = ?, species = ?, rarity = ?, level = ?, xp = ?, lifetime_steps = ?, health = ?, happiness = ?,
+            intellect = ?, strength = ?, streak_days = ?, last_active_date = ?, hatched_at = ?
+            WHERE user_id = ?`,
+      args: [stage, species, rarity, level, xp, lifetimeSteps, health, happiness, intellect, strength, streakDays, date, hatchedAt, userId],
+    });
+  }
+  // A sync that brought nothing new (by far the most common case when polling every 20s)
+  // writes nothing at all and is over after the single read batch above.
+  if (writes.length > 0) await db.batch(writes, "write");
+
+  await syncAvatarToStage(userId, updatedPet, evolutionStage, justHatched);
+
+  return { pet: updatedPet, todaySteps: newSteps };
+}
+
+/** Brings the pet's artwork in line with the evolution stage its level has actually reached.
+ *
+ *  This used to fire only on the exact sync that crossed a stage boundary, and only if an
+ *  avatar happened to be in the "completed" state right then — so an evolution that landed
+ *  while the first avatar was still generating (or while the image API was erroring) was lost
+ *  permanently, and the pet visually never upgraded again. Instead we now persist which stage
+ *  the current artwork depicts (`avatar_stage`) and reconcile against it on every sync, so a
+ *  missed or failed upgrade is simply retried on the next one. */
+async function syncAvatarToStage(
+  userId: number,
+  pet: Pet,
+  evolutionStage: EvolutionStage,
+  justHatched: boolean,
+): Promise<void> {
   if (justHatched) {
     // Best-effort: kick off the pet's very first avatar right away so the reveal feels alive —
     // completely bare/unclothed (see EVOLUTION_OUTFIT_PROMPT["baby"]), gear gets earned through
-    // evolution below. A random seed is rolled once here and reused on every future evolution
-    // edit for extra visual consistency on top of the image-to-image reference.
-    // If Polza errors out here, avatar_status just stays "none" and the player can still
-    // generate one manually from the pet panel.
+    // evolution. A random seed is rolled once here and reused on every future evolution edit
+    // for extra visual consistency on top of the image-to-image reference.
     try {
       const seed = Math.floor(Math.random() * 2 ** 31);
-      const gen = await startAvatarGeneration(buildPetPrompt(species, "", rarity, evolutionStage), { seed });
-      await setAvatarPending(userId, gen.id, "", seed);
+      const gen = await startAvatarGeneration(buildPetPrompt(pet.species, "", pet.rarity, evolutionStage), { seed });
+      await setAvatarPending(userId, gen.id, "", seed, evolutionStage);
+      pet.avatar_status = "pending";
     } catch {
       // ignore — manual generation remains available
     }
-  } else if (evolved && pet.avatar_status === "completed" && pet.avatar_source_url) {
-    // Crossing an evolution-stage boundary (baby → adult → elder → ascended) image-to-image
-    // edits the pet's EXISTING avatar (the magenta-background source version, not the
-    // transparent display cutout) to add the next tier of gear, so it stays recognizably the
-    // same creature instead of rolling a completely different-looking image.
-    try {
-      const prompt = buildEvolutionEditPrompt(species, rarity, evolutionStage);
-      const gen = await startAvatarGeneration(prompt, {
-        images: [pet.avatar_source_url],
-        strength: 0.35,
-        seed: pet.avatar_seed ?? undefined,
-      });
-      await setAvatarPending(userId, gen.id, pet.avatar_description ?? "", pet.avatar_seed ?? undefined);
-    } catch {
-      // ignore — pet keeps its current art, nothing broken
-    }
+    return;
   }
 
-  const updated = await db.execute({ sql: "SELECT * FROM pets WHERE user_id = ?", args: [userId] });
-  return updated.rows[0] as unknown as Pet;
+  // Only a finished avatar can be edited into the next tier, and only one job at a time.
+  if (pet.avatar_status !== "completed" || !pet.avatar_source_url) return;
+
+  // Pets that predate the avatar_stage column have artwork from the hatch generation, i.e. bare.
+  const currentArtStage = pet.avatar_stage ?? "baby";
+  const nextStage = nextEvolutionStageToward(currentArtStage, evolutionStage);
+  if (!nextStage) return;
+
+  // Image-to-image edits the pet's EXISTING avatar (the magenta-background source version, not
+  // the transparent display cutout) to add exactly one tier of gear, so it stays recognizably
+  // the same creature instead of rolling a completely different-looking image.
+  try {
+    const prompt = buildEvolutionEditPrompt(pet.species, pet.rarity, nextStage);
+    const gen = await startAvatarGeneration(prompt, {
+      images: [pet.avatar_source_url],
+      strength: 0.35,
+      seed: pet.avatar_seed ?? undefined,
+    });
+    await setAvatarPending(userId, gen.id, pet.avatar_description ?? "", pet.avatar_seed ?? undefined, nextStage);
+    pet.avatar_status = "pending";
+    pet.avatar_target_stage = nextStage;
+  } catch {
+    // ignore — pet keeps its current art and retries on the next sync
+  }
 }
 
 /** Wipes a pet back to a brand-new egg and deletes its step history, so the player can start
@@ -289,7 +404,8 @@ export async function resetPet(userId: number): Promise<Pet> {
         sql: `UPDATE pets SET stage = 'egg', species = 'unknown', rarity = 'common', level = 0, xp = 0, name = NULL,
               lifetime_steps = 0, health = 50, happiness = 50, intellect = 10, strength = 10, streak_days = 0,
               last_active_date = NULL, hatched_at = NULL, avatar_url = NULL, avatar_status = 'none',
-              avatar_generation_id = NULL, avatar_description = NULL, avatar_seed = NULL, avatar_source_url = NULL
+              avatar_generation_id = NULL, avatar_description = NULL, avatar_seed = NULL, avatar_source_url = NULL,
+              avatar_stage = NULL, avatar_target_stage = NULL
               WHERE user_id = ?`,
         args: [userId],
       },
@@ -327,13 +443,19 @@ export async function getStepHistory(
   return result;
 }
 
-export async function getTodaySteps(userId: number): Promise<number> {
+/** Pet plus today's step count in a single round trip — what every screen needs on open. */
+export async function getPetState(userId: number, tzOffset: number): Promise<PetState> {
   await ensureSchema();
-  const res = await db.execute({
-    sql: "SELECT steps FROM step_logs WHERE user_id = ? AND date = ?",
-    args: [userId, today()],
-  });
-  return Number((res.rows[0] as unknown as { steps: number } | undefined)?.steps ?? 0);
+  const [petRes, stepsRes] = await db.batch(
+    [
+      { sql: "SELECT * FROM pets WHERE user_id = ?", args: [userId] },
+      { sql: "SELECT steps FROM step_logs WHERE user_id = ? AND date = ?", args: [userId, localDate(tzOffset)] },
+    ],
+    "read",
+  );
+  const pet = (petRes.rows[0] as unknown as Pet | undefined) ?? (await getOrCreatePet(userId));
+  const todaySteps = Number((stepsRes.rows[0] as unknown as { steps: number } | undefined)?.steps ?? 0);
+  return { pet, todaySteps };
 }
 
 export async function setPetName(userId: number, name: string): Promise<void> {
@@ -344,24 +466,28 @@ export async function setPetName(userId: number, name: string): Promise<void> {
   });
 }
 
+/** `targetStage` is the evolution stage the artwork being generated will depict — recorded now
+ *  and promoted to `avatar_stage` only once the image actually lands (see completeAvatar), so a
+ *  failed generation leaves the pet's recorded look untouched and gets retried. */
 export async function setAvatarPending(
   userId: number,
   generationId: string,
   description: string,
   seed?: number,
+  targetStage?: EvolutionStage,
 ): Promise<void> {
   await ensureSchema();
   if (seed !== undefined) {
     await db.execute({
-      sql: `UPDATE pets SET avatar_status = 'pending', avatar_generation_id = ?, avatar_description = ?, avatar_seed = ?
-            WHERE user_id = ?`,
-      args: [generationId, description, seed, userId],
+      sql: `UPDATE pets SET avatar_status = 'pending', avatar_generation_id = ?, avatar_description = ?, avatar_seed = ?,
+            avatar_target_stage = ? WHERE user_id = ?`,
+      args: [generationId, description, seed, targetStage ?? null, userId],
     });
   } else {
     await db.execute({
-      sql: `UPDATE pets SET avatar_status = 'pending', avatar_generation_id = ?, avatar_description = ?
-            WHERE user_id = ?`,
-      args: [generationId, description, userId],
+      sql: `UPDATE pets SET avatar_status = 'pending', avatar_generation_id = ?, avatar_description = ?,
+            avatar_target_stage = ? WHERE user_id = ?`,
+      args: [generationId, description, targetStage ?? null, userId],
     });
   }
 }
@@ -369,7 +495,9 @@ export async function setAvatarPending(
 export async function completeAvatar(userId: number, displayUrl: string, sourceUrl: string): Promise<void> {
   await ensureSchema();
   await db.execute({
-    sql: "UPDATE pets SET avatar_status = 'completed', avatar_url = ?, avatar_source_url = ? WHERE user_id = ?",
+    sql: `UPDATE pets SET avatar_status = 'completed', avatar_url = ?, avatar_source_url = ?,
+          avatar_stage = COALESCE(avatar_target_stage, avatar_stage, 'baby'), avatar_target_stage = NULL
+          WHERE user_id = ?`,
     args: [displayUrl, sourceUrl, userId],
   });
 }
@@ -377,7 +505,7 @@ export async function completeAvatar(userId: number, displayUrl: string, sourceU
 export async function failAvatar(userId: number): Promise<void> {
   await ensureSchema();
   await db.execute({
-    sql: "UPDATE pets SET avatar_status = 'failed' WHERE user_id = ?",
+    sql: "UPDATE pets SET avatar_status = 'failed', avatar_target_stage = NULL WHERE user_id = ?",
     args: [userId],
   });
 }
@@ -415,9 +543,13 @@ export async function getGoogleTokens(userId: number): Promise<GoogleAccountToke
 }
 
 /** Returns a usable access token, transparently refreshing it if it's expired (or about to).
- *  Returns null if the user has never connected Google Fit. */
-export async function getValidGoogleAccessToken(userId: number): Promise<string | null> {
-  const tokens = await getGoogleTokens(userId);
+ *  Returns null if the user has never connected Google Fit. Pass `known` when the tokens were
+ *  already loaded (getUserContext does) to skip a redundant round trip. */
+export async function getValidGoogleAccessToken(
+  userId: number,
+  known?: GoogleAccountTokens | null,
+): Promise<string | null> {
+  const tokens = known !== undefined ? known : await getGoogleTokens(userId);
   if (!tokens) return null;
   if (tokens.expiry > Date.now() + 60_000) return tokens.accessToken;
 

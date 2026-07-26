@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { BarChart3, ChevronLeft, ChevronRight } from "lucide-react";
 import { getStepHistory, type StepHistoryDay } from "../lib/api";
+import { localDateString } from "../lib/day";
 
 const MONTH_NAMES = [
   "Январь", "Февраль", "Март", "Апрель", "Май", "Июнь",
@@ -20,13 +21,17 @@ function shiftMonth(monthStr: string, delta: number): string {
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
 }
 
+// The server's dates are already the player's own calendar days, so they must be rendered as
+// plain local dates. Parsing them as UTC and letting toLocaleDateString convert would shift
+// every label back a day for anyone west of UTC.
 function shortDate(iso: string): string {
-  return new Date(`${iso}T00:00:00Z`).toLocaleDateString("ru-RU", { day: "numeric", month: "short" });
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString("ru-RU", { day: "numeric", month: "short" });
 }
 
 export default function StatsScreen({ onClose }: { onClose: () => void }) {
   const [mode, setMode] = useState<Mode>("7");
-  const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7));
+  const [month, setMonth] = useState(() => localDateString().slice(0, 7));
   const [history, setHistory] = useState<StepHistoryDay[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [activeIdx, setActiveIdx] = useState<number | null>(null);

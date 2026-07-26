@@ -1,10 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { getStepHistory, upsertUser } from "./_lib/pet-logic.js";
+import { getStepHistory, getUserContext } from "./_lib/pet-logic.js";
 import { resolveTelegramUser } from "./_lib/telegram.js";
-
-function isoDate(d: Date): string {
-  return d.toISOString().slice(0, 10);
-}
+import { localDate, parseTzOffset, shiftDate } from "./_lib/tz.js";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const tgUser = resolveTelegramUser(
@@ -13,7 +10,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   );
   if (!tgUser) return res.status(401).json({ error: "invalid initData" });
 
-  const userId = await upsertUser(String(tgUser.id), tgUser.username ?? null);
+  const { userId, tzOffset } = await getUserContext(
+    String(tgUser.id),
+    tgUser.username ?? null,
+    parseTzOffset(req.headers["x-tz-offset"]),
+  );
 
   const month = req.query.month as string | undefined;
   let startDate: string;
@@ -25,12 +26,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const lastDay = new Date(Date.UTC(y, m, 0)).getUTCDate();
     endDate = `${month}-${String(lastDay).padStart(2, "0")}`;
   } else {
+    // Ranges end on the player's own "today", not UTC's — otherwise someone east of UTC sees
+    // their current day missing from the chart for part of the evening.
     const days = req.query.range === "30" ? 30 : 7;
-    const end = new Date();
-    const start = new Date();
-    start.setUTCDate(start.getUTCDate() - (days - 1));
-    startDate = isoDate(start);
-    endDate = isoDate(end);
+    endDate = localDate(tzOffset);
+    startDate = shiftDate(endDate, -(days - 1));
   }
 
   const history = await getStepHistory(userId, startDate, endDate);

@@ -24,6 +24,8 @@ export interface Pet {
   avatar_description: string | null;
   avatar_seed: number | null;
   avatar_source_url: string | null;
+  avatar_stage: string | null;
+  avatar_target_stage: string | null;
 }
 
 export interface PetState {
@@ -31,12 +33,21 @@ export interface PetState {
   todaySteps: number;
 }
 
-function initDataHeader(): Record<string, string> {
-  const initData = window.Telegram?.WebApp?.initData;
-  return initData ? { "x-telegram-init-data": initData } : {};
+/** The device's current UTC offset in minutes east of UTC (Moscow → 180). Sent on every request
+ *  so the server runs the player's day — step ring, milestones, streaks — on their local
+ *  midnight. Recomputed per request, so DST changes and travel are handled without any setup. */
+export function tzOffsetMinutes(): number {
+  return -new Date().getTimezoneOffset();
 }
 
-export async function fetchPet(): Promise<PetState> {
+function initDataHeader(): Record<string, string> {
+  const initData = window.Telegram?.WebApp?.initData;
+  const headers: Record<string, string> = { "x-tz-offset": String(tzOffsetMinutes()) };
+  if (initData) headers["x-telegram-init-data"] = initData;
+  return headers;
+}
+
+export async function fetchPet(): Promise<PetState & { googleFitConnected: boolean }> {
   const res = await fetch("/api/pet", { headers: { ...initDataHeader() } });
   if (!res.ok) throw new Error(`GET /api/pet failed: ${res.status}`);
   return res.json();

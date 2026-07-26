@@ -24,21 +24,40 @@ export function statXpMultiplier(avgStat: number, statCap: number): number {
 
 export type EvolutionStage = "baby" | "novice" | "wanderer" | "veteran" | "champion" | "master" | "legend";
 
-const EVOLUTION_THRESHOLDS: [EvolutionStage, number][] = [
-  ["legend", 48],
-  ["master", 34],
-  ["champion", 24],
-  ["veteran", 16],
-  ["wanderer", 9],
-  ["novice", 4],
-  ["baby", 0],
+export const EVOLUTION_ORDER: EvolutionStage[] = [
+  "baby",
+  "novice",
+  "wanderer",
+  "veteran",
+  "champion",
+  "master",
+  "legend",
 ];
 
+const EVOLUTION_MIN_LEVEL: Record<EvolutionStage, number> = {
+  baby: 0,
+  novice: 2,
+  wanderer: 6,
+  veteran: 11,
+  champion: 18,
+  master: 28,
+  legend: 40,
+};
+
 export function evolutionStageForLevel(level: number): EvolutionStage {
-  for (const [stage, minLevel] of EVOLUTION_THRESHOLDS) {
-    if (level >= minLevel) return stage;
+  let stage: EvolutionStage = "baby";
+  for (const candidate of EVOLUTION_ORDER) {
+    if (level >= EVOLUTION_MIN_LEVEL[candidate]) stage = candidate;
   }
-  return "baby";
+  return stage;
+}
+
+/** Level at which the pet next changes its look/title — drives the "next evolution" hint. */
+export function nextEvolutionLevel(level: number): number | null {
+  for (const stage of EVOLUTION_ORDER) {
+    if (EVOLUTION_MIN_LEVEL[stage] > level) return EVOLUTION_MIN_LEVEL[stage];
+  }
+  return null;
 }
 
 // Doubles as the pet's displayed title/rank.

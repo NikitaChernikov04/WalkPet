@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import "./App.css";
 import {
   fetchPet,
@@ -13,10 +13,12 @@ import {
   type Pet,
   type Rarity,
 } from "./lib/api";
+import { localDateString, msUntilLocalMidnight } from "./lib/day";
 import {
   evolutionStageForLevel,
   EVOLUTION_STAGE_LABELS,
   levelProgress,
+  nextEvolutionLevel,
   statCapForLevel,
   statXpMultiplier,
 } from "./lib/leveling";
@@ -115,7 +117,10 @@ export default function App() {
   const prevTodayStepsRef = useRef(0);
   const prevStageRef = useRef<string | null>(null);
   const prevLevelRef = useRef<number | null>(null);
-  const currentDateRef = useRef(new Date().toISOString().slice(0, 10));
+  // The local calendar day the currently displayed numbers belong to — a timer can be starved
+  // while the device sleeps, so the day is re-checked whenever the app becomes visible again.
+  const currentDateRef = useRef(localDateString());
+  const [syncing, setSyncing] = useState(false);
 
   const pushToast = (text: string) => {
     const id = toastSeq++;
@@ -123,78 +128,102 @@ export default function App() {
     setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 2500);
   };
 
+  const applyState = useCallback((next: { pet: Pet; todaySteps: number }, resetBaselines = false) => {
+    setPet(next.pet);
+    setTodaySteps(next.todaySteps);
+    if (next.todaySteps > lastKnownStepsRef.current) setStepTick((t) => t + 1);
+    lastKnownStepsRef.current = next.todaySteps;
+    if (resetBaselines) {
+      prevTodayStepsRef.current = next.todaySteps;
+      prevStageRef.current = next.pet.stage;
+      prevLevelRef.current = next.pet.level;
+    }
+  }, []);
+
+  const reload = useCallback(() => {
+    // /api/pet answers with the connection status too, so the very first sync no longer waits
+    // on a separate status round trip before it can start.
+    currentDateRef.current = localDateString();
+    fetchPet()
+      .then(({ pet, todaySteps, googleFitConnected }) => {
+        lastKnownStepsRef.current = todaySteps;
+        applyState({ pet, todaySteps }, true);
+        setGoogleFitConnected(googleFitConnected);
+      })
+      .catch((e) => setError(String(e)));
+  }, [applyState]);
+
   useEffect(() => {
     window.Telegram?.WebApp?.ready();
     window.Telegram?.WebApp?.expand();
-    fetchPet()
-      .then(({ pet, todaySteps }) => {
-        setPet(pet);
-        setTodaySteps(todaySteps);
-        lastKnownStepsRef.current = todaySteps;
-        prevTodayStepsRef.current = todaySteps;
-        prevStageRef.current = pet.stage;
-        prevLevelRef.current = pet.level;
-      })
-      .catch((e) => setError(String(e)));
-  }, []);
+    reload();
+  }, [reload]);
 
-  // The server naturally starts a fresh day (new step_logs row, reset milestones) at UTC
-  // midnight, but if the app stays open across that boundary the client never finds out —
-  // it would otherwise keep piling new taps on top of yesterday's cached total. Poll for the
-  // date rollover and re-fetch fresh state from the server when it happens.
+  // The server starts a fresh day (new step_logs row, milestones re-armed) at the player's own
+  // local midnight; if the app stays open across that boundary the client has to find out, or
+  // it keeps showing yesterday's total on the ring. One exact timer per day instead of polling
+  // the clock — and rescheduled after each rollover so it keeps working indefinitely.
   useEffect(() => {
-    const interval = setInterval(() => {
-      const nowDate = new Date().toISOString().slice(0, 10);
-      if (nowDate === currentDateRef.current) return;
-      currentDateRef.current = nowDate;
-      fetchPet()
-        .then(({ pet, todaySteps }) => {
-          setPet(pet);
-          setTodaySteps(todaySteps);
-          lastKnownStepsRef.current = todaySteps;
-          prevTodayStepsRef.current = todaySteps;
-        })
-        .catch((e) => setError(String(e)));
-    }, 30000);
-    return () => clearInterval(interval);
-  }, []);
+    let timer: number;
+    const schedule = () => {
+      timer = window.setTimeout(() => {
+        reload();
+        schedule();
+      }, msUntilLocalMidnight());
+    };
+    schedule();
+    return () => window.clearTimeout(timer);
+  }, [reload]);
 
-  const refreshGoogleFitStatus = () => {
+  const refreshGoogleFitStatus = useCallback(() => {
     getGoogleFitStatus()
       .then(({ connected }) => setGoogleFitConnected(connected))
       .catch(() => {});
-  };
+  }, []);
 
-  useEffect(refreshGoogleFitStatus, []);
+  // A failed background sync must never replace the whole screen with an error page the way a
+  // failed initial load does — at three syncs a minute, one flaky request would otherwise wipe
+  // out a perfectly good pet. Silent on the timer, a toast when the player asked for it.
+  const sync = useCallback(
+    (manual = false) => {
+      setSyncing(true);
+      return syncGoogleFit()
+        .then((state) => applyState(state))
+        .catch(() => {
+          if (manual) pushToast("😕 Не удалось обновить шаги");
+        })
+        .finally(() => setSyncing(false));
+    },
+    [applyState],
+  );
 
-  // The OAuth consent screen opens in the system browser (Telegram.WebApp.openLink); re-check
-  // connection status once the user comes back to the Mini App tab.
+  // Google Fit is the sole source of step data — sync it in periodically. 20s rather than 60s:
+  // Google's own step aggregation already lags behind real walking, so a slow poll on top of
+  // that was most of why fresh steps took so long to show up.
+  useEffect(() => {
+    if (!googleFitConnected) return;
+    sync();
+    const interval = setInterval(() => sync(), 20000);
+    return () => clearInterval(interval);
+  }, [googleFitConnected, sync]);
+
+  // Coming back to the Mini App is the moment stale numbers are most visible, and — after the
+  // OAuth consent screen, which opens in the system browser via Telegram.WebApp.openLink — the
+  // moment the connection may have just been established. Handle both on the same event, and
+  // re-check the calendar day in case the device was asleep across midnight.
   useEffect(() => {
     const onVisible = () => {
-      if (document.visibilityState === "visible") refreshGoogleFitStatus();
+      if (document.visibilityState !== "visible") return;
+      if (googleFitConnected) sync();
+      else refreshGoogleFitStatus();
+      if (currentDateRef.current !== localDateString()) {
+        currentDateRef.current = localDateString();
+        reload();
+      }
     };
     document.addEventListener("visibilitychange", onVisible);
     return () => document.removeEventListener("visibilitychange", onVisible);
-  }, []);
-
-  // Google Fit is the sole source of step data — sync it in periodically.
-  useEffect(() => {
-    if (!googleFitConnected) return;
-    const sync = () => {
-      syncGoogleFit()
-        .then(({ pet, todaySteps }) => {
-          setPet(pet);
-          // Give the pet a little bounce when a sync actually brought in new steps.
-          if (todaySteps > lastKnownStepsRef.current) setStepTick((t) => t + 1);
-          lastKnownStepsRef.current = todaySteps;
-          setTodaySteps(todaySteps);
-        })
-        .catch((e) => setError(String(e)));
-    };
-    sync();
-    const interval = setInterval(sync, 60000);
-    return () => clearInterval(interval);
-  }, [googleFitConnected]);
+  }, [googleFitConnected, refreshGoogleFitStatus, reload, sync]);
 
   // First-run nudge: any account with no Google Fit connection can't get real step data at
   // all, so prompt to connect right away instead of leaving the player wondering why nothing
@@ -263,13 +292,9 @@ export default function App() {
     }
     setConfirmingReset(false);
     resetPet()
-      .then(({ pet, todaySteps }) => {
-        lastKnownStepsRef.current = todaySteps;
-        prevTodayStepsRef.current = todaySteps;
-        prevStageRef.current = pet.stage;
-        prevLevelRef.current = pet.level;
-        setPet(pet);
-        setTodaySteps(todaySteps);
+      .then((state) => {
+        lastKnownStepsRef.current = state.todaySteps;
+        applyState(state, true);
       })
       .catch((e) => setError(String(e)));
   };
@@ -352,7 +377,12 @@ export default function App() {
         </div>
       </header>
 
-      <GoogleFitConnect connected={googleFitConnected} onConnect={handleConnectGoogleFit} />
+      <GoogleFitConnect
+        connected={googleFitConnected}
+        syncing={syncing}
+        onConnect={handleConnectGoogleFit}
+        onSync={() => sync(true)}
+      />
 
       {showStats ? (
         <StatsScreen onClose={() => setShowStats(false)} />
@@ -450,6 +480,7 @@ function PetPanel({
   const { into, span } = levelProgress(pet.xp, pet.level);
   const levelPct = span > 0 ? Math.min(100, (into / span) * 100) : 100;
   const evolutionStage = evolutionStageForLevel(pet.level);
+  const nextUpgradeLevel = nextEvolutionLevel(pet.level);
   const avgStat = (pet.health + pet.happiness + pet.intellect + pet.strength) / 4;
   const careMultiplier = statXpMultiplier(avgStat, statCap);
   const decayResistance = RARITY_DECAY_RESISTANCE[pet.rarity];
@@ -488,6 +519,12 @@ function PetPanel({
         <span className="level-progress-text">
           {into.toLocaleString("ru-RU")} / {span.toLocaleString("ru-RU")} шагов до след. уровня
         </span>
+        {/* Levels come far more often than new gear, so without this the pet looks stuck. */}
+        {nextUpgradeLevel !== null && (
+          <span className="level-evolution-hint">
+            🧬 Новый облик на ур. {nextUpgradeLevel} · {EVOLUTION_STAGE_LABELS[evolutionStageForLevel(nextUpgradeLevel)]}
+          </span>
+        )}
       </div>
 
       <PetNameEditor name={pet.name} onGenerateAi={onGenerateAiName} onSetCustom={onSetCustomName} />

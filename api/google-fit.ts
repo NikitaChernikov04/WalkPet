@@ -1,11 +1,8 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { resolveTelegramUser } from "./_lib/telegram.js";
-import { getGoogleTokens, getTodaySteps, getValidGoogleAccessToken, recordSteps, upsertUser } from "./_lib/pet-logic.js";
+import { getUserContext, getValidGoogleAccessToken, recordSteps } from "./_lib/pet-logic.js";
 import { fetchStepsForDate } from "./_lib/googleFit.js";
-
-function todayISO(): string {
-  return new Date().toISOString().slice(0, 10);
-}
+import { localDate, parseTzOffset } from "./_lib/tz.js";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const tgUser = resolveTelegramUser(
@@ -14,20 +11,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   );
   if (!tgUser) return res.status(401).json({ error: "invalid initData" });
 
-  const userId = await upsertUser(String(tgUser.id), tgUser.username ?? null);
+  // One query resolves the user id, their day-boundary timezone and their Google tokens.
+  const { userId, tzOffset, tokens } = await getUserContext(
+    String(tgUser.id),
+    tgUser.username ?? null,
+    parseTzOffset(req.headers["x-tz-offset"]),
+  );
 
   if (req.method === "GET") {
-    const tokens = await getGoogleTokens(userId);
     return res.status(200).json({ connected: tokens !== null });
   }
 
   if (req.method === "POST") {
-    const accessToken = await getValidGoogleAccessToken(userId);
+    const accessToken = await getValidGoogleAccessToken(userId, tokens);
     if (!accessToken) return res.status(400).json({ error: "google fit not connected" });
 
-    const steps = await fetchStepsForDate(accessToken, todayISO());
-    const pet = await recordSteps(userId, steps);
-    const todaySteps = await getTodaySteps(userId);
+    const steps = await fetchStepsForDate(accessToken, localDate(tzOffset), tzOffset);
+    // recordSteps already knows the resulting total — no follow-up read needed.
+    const { pet, todaySteps } = await recordSteps(userId, steps, tzOffset);
     return res.status(200).json({ pet, todaySteps });
   }
 
