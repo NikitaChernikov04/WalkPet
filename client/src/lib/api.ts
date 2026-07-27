@@ -197,6 +197,30 @@ export function petImageUrl(userId: number, version: string | null): string {
   return `/api/pet-image?u=${userId}&v=${encodeURIComponent(version ?? "0")}`;
 }
 
+/** Absolute URL of the shareable pet card PNG — absolute because shareToStory hands it to
+ *  Telegram, which fetches it from its own servers and cannot resolve a relative path. The Mini
+ *  App is served from the same origin as the API, so the client can compose this itself.
+ *
+ *  `v` covers everything the card draws, so a pet that has just levelled up is never shared as
+ *  its older self out of a cache. Kept in step with petCardUrl in api/_lib/share.ts. */
+export function petCardUrl(pet: Pet | PetSync, format: "square" | "story" = "square"): string {
+  const version = `${pet.level}.${pet.streak_days}.${pet.lifetime_steps}.${pet.avatar_generation_id ?? "0"}`;
+  const query = new URLSearchParams({ v: version });
+  if (format === "story") query.set("f", "story");
+  return `${window.location.origin}/card/${pet.user_id}.png?${query.toString()}`;
+}
+
+/** Stages the card as an inline message for Telegram's own share sheet. */
+export function preparePetCardShare(): Promise<{ preparedMessageId: string }> {
+  return petAction({ action: "share", target: "sheet" });
+}
+
+/** Sends the card to the player's own chat with the bot — the fallback where the share sheet
+ *  isn't available. */
+export function sendPetCardToChat(): Promise<{ sent: boolean }> {
+  return petAction({ action: "share", target: "chat" });
+}
+
 declare global {
   interface Window {
     Telegram?: {
@@ -207,6 +231,11 @@ declare global {
         openLink?: (url: string) => void;
         openTelegramLink?: (url: string) => void;
         isVersionAtLeast?: (version: string) => boolean;
+        /** Bot API 8.0. Opens the native chat picker for a message staged server-side with
+         *  savePreparedInlineMessage. */
+        shareMessage?: (preparedMessageId: string, callback?: (sent: boolean) => void) => void;
+        /** Bot API 7.8. Opens the story editor with the given image already placed. */
+        shareToStory?: (mediaUrl: string, params?: { text?: string; widget_link?: { url: string; name?: string } }) => void;
       };
     };
   }

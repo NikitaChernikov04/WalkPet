@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { z } from "zod";
 import { getPetState, getUserContext, resetPet } from "./_lib/pet-logic.js";
 import { applyPetName, PetActionError, pollAvatarGeneration, requestAvatarGeneration } from "./_lib/pet-actions.js";
+import { prepareCardMessage, sendCardToSelf } from "./_lib/share.js";
 import { resolveTelegramUser, startParamFrom } from "./_lib/telegram.js";
 import { parseTzOffset } from "./_lib/tz.js";
 
@@ -15,13 +16,16 @@ import { parseTzOffset } from "./_lib/tz.js";
  *
  *    GET  /api/pet                      → { pet, todaySteps, googleFitConnected }
  *    GET  /api/pet?action=avatar-poll   → { pet }
- *    POST /api/pet { action: "avatar" | "name" | "reset", … } → { pet, … }
+ *    POST /api/pet { action: "avatar" | "name" | "reset" | "share", … } → { pet, … }
  */
 const postSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("avatar"), description: z.string().trim().max(300).optional() }),
   // name omitted entirely = "pick one for me" via the model.
   z.object({ action: z.literal("name"), name: z.string().trim().min(1).max(24).optional() }),
   z.object({ action: z.literal("reset") }),
+  // "sheet" stages the card for Telegram's own share sheet and needs Bot API 8.0 on the client;
+  // "chat" just sends it to the player's chat with the bot. The client picks by version.
+  z.object({ action: z.literal("share"), target: z.enum(["sheet", "chat"]) }),
 ]);
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -62,6 +66,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           const pet = await resetPet(userId);
           // A reset wipes step_logs, so today's count is zero by construction — no query needed.
           return res.status(200).json({ pet, todaySteps: 0 });
+        }
+        case "share": {
+          const { pet } = await getPetState(userId, tzOffset);
+          if (pet.stage !== "hatched") return res.status(409).json({ error: "питомец ещё не вылупился" });
+          if (parsed.data.target === "chat") {
+            await sendCardToSelf(String(tgUser.id), userId, pet);
+            return res.status(200).json({ sent: true });
+          }
+          return res.status(200).json({ preparedMessageId: await prepareCardMessage(String(tgUser.id), userId, pet) });
         }
       }
     }

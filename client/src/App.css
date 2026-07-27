@@ -154,6 +154,53 @@ body {
   color: rgba(255, 255, 255, 0.5);
 }
 
+/* --- Share the pet card --- */
+
+.share-card-row {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+  margin: 0 0 14px;
+}
+
+.share-card-btn {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 11px 14px;
+  border-radius: 14px;
+  background: var(--violet);
+  color: #ffffff;
+  font-family: "Manrope", sans-serif;
+  font-size: 0.8rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.share-card-btn:hover {
+  background: var(--violet-deep);
+}
+
+.share-card-btn:disabled {
+  opacity: 0.6;
+}
+
+/* Story sharing is a second destination rather than the main one, and it is only present on
+   clients new enough to have it — so it reads as an option beside the primary button, not as a
+   competing one. */
+.share-card-btn.secondary {
+  flex: 0 0 auto;
+  background: transparent;
+  border: 2px solid var(--violet);
+  color: var(--violet);
+}
+
+.share-card-btn.secondary:hover {
+  background: rgba(155, 107, 255, 0.16);
+}
+
 /* --- Google Fit connect strip --- */
 
 .google-fit-connect-btn,

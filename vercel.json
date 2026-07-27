@@ -1,5 +1,16 @@
 {
   "installCommand": "npm install",
   "buildCommand": "npm run build -w client",
-  "outputDirectory": "client/dist"
+  "outputDirectory": "client/dist",
+  "functions": {
+    "api/pet-card.ts": {
+      "includeFiles": "api/_lib/fonts/**"
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/card/:user(\\d+).png",
+      "destination": "/api/pet-card?u=:user"
+    }
+  ]
 }

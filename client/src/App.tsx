@@ -31,6 +31,7 @@ import AvatarGenerator from "./components/AvatarGenerator";
 import GoogleFitConnect from "./components/GoogleFitConnect";
 import GoogleFitOnboarding from "./components/GoogleFitOnboarding";
 import PetNameEditor from "./components/PetNameEditor";
+import SharePetCard from "./components/SharePetCard";
 import StatsScreen from "./components/StatsScreen";
 import ReferralPanel from "./components/ReferralPanel";
 import FriendsScreen from "./components/FriendsScreen";
@@ -451,6 +452,7 @@ export default function App() {
               onGenerateAvatar={handleGenerateAvatar}
               onGenerateAiName={handleGenerateAiName}
               onSetCustomName={handleSetCustomName}
+              onToast={pushToast}
             />
           )}
         </>
@@ -515,6 +517,7 @@ function PetPanel({
   onGenerateAvatar,
   onGenerateAiName,
   onSetCustomName,
+  onToast,
 }: {
   pet: Pet;
   todaySteps: number;
@@ -523,6 +526,7 @@ function PetPanel({
   onGenerateAvatar: (description: string) => void;
   onGenerateAiName: () => Promise<void>;
   onSetCustomName: (name: string) => Promise<void>;
+  onToast: (message: string) => void;
 }) {
   const statCap = statCapForLevel(pet.level) + RARITY_STAT_CAP_BONUS[pet.rarity];
   // Level XP is a direct 1:1 mirror of post-hatch steps server-side (see pet-logic.ts) —
@@ -586,6 +590,8 @@ function PetPanel({
       <PetNameEditor name={pet.name} onGenerateAi={onGenerateAiName} onSetCustom={onSetCustomName} />
 
       <AvatarGenerator status={pet.avatar_status} onGenerate={onGenerateAvatar} />
+
+      <SharePetCard pet={pet} onToast={onToast} />
 
       <div className="steps-hero">
         <StepRing todaySteps={todaySteps} />
