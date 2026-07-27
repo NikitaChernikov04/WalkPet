@@ -28,23 +28,57 @@ async function buildCaption(userId: number, pet: Pet): Promise<string> {
   return `${name} — ${pet.species}, уровень ${pet.level}. Растёт от моих реальных шагов в WalkPet.\n${link}`;
 }
 
-/** Pulls the card through our own CDN before handing the URL to Telegram.
- *
- *  Telegram fetches `photo_url` itself and shows the photo progressively as it arrives, so a slow
- *  first response is visible as a card that is only drawn across its top strip. Rendering is fast
- *  on a warm instance (~100ms) and slow on a cold one (several seconds, most of it wasm start-up
- *  and font parsing), and the share is exactly the moment that instance is likely to be cold. One
- *  request here pays that cost while the player is still looking at a spinner, and leaves a CDN
- *  entry that Telegram then gets immediately.
- *
- *  Best effort in both directions: a failure here is not a reason to abandon the share, since
- *  Telegram fetching it slowly is still better than not sharing at all. */
-async function warmCard(url: string): Promise<void> {
+/** Fetches the card, which also renders and stores it if this is the first ask for this version.
+ *  Returns null rather than throwing: a share that cannot get the bytes falls back to handing
+ *  Telegram the URL, which is worse but not nothing. */
+async function fetchCard(url: string): Promise<Buffer | null> {
   try {
-    await fetch(url, { signal: AbortSignal.timeout(15_000) });
+    const res = await fetch(url, { signal: AbortSignal.timeout(20_000) });
+    if (!res.ok) throw new Error(`card fetch ${res.status}`);
+    return Buffer.from(await res.arrayBuffer());
   } catch (err) {
-    console.error("card warm-up failed", err);
+    console.error("card fetch failed", err);
+    return null;
   }
+}
+
+/** Puts the card on Telegram's own servers and returns its file_id.
+ *
+ *  This is what makes the share reliable. Handing Telegram a `photo_url` leaves the download to
+ *  Telegram, and the result kept arriving in chats half-drawn with grey beneath — the signature of
+ *  a fetcher that stopped early. Notably `sendPhoto` with the identical URL always worked, so the
+ *  URL and the file were never the problem; the inline path simply fetches under a budget we do
+ *  not control. Uploading the bytes ourselves removes that fetch from the picture entirely, and
+ *  the recipient then loads the photo from Telegram's CDN like any other.
+ *
+ *  Telegram has no upload-only endpoint, so the file is created by sending it silently to the
+ *  player's own chat with the bot and deleting it immediately; a file_id outlives the message it
+ *  arrived in. */
+async function uploadCard(telegramUserId: string, jpeg: Buffer): Promise<string> {
+  const form = new FormData();
+  form.set("chat_id", telegramUserId);
+  form.set("disable_notification", "true");
+  form.set("photo", new Blob([new Uint8Array(jpeg)], { type: "image/jpeg" }), "card.jpg");
+
+  const res = await fetch(`https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendPhoto`, {
+    method: "POST",
+    body: form,
+  });
+  const data = (await res.json()) as {
+    ok: boolean;
+    description?: string;
+    result?: { message_id: number; photo: { file_id: string }[] };
+  };
+  if (!data.ok || !data.result?.photo?.length) throw new Error(`upload failed: ${data.description ?? res.status}`);
+
+  // Largest size last. Deleting the carrier message does not invalidate the file.
+  const fileId = data.result.photo[data.result.photo.length - 1].file_id;
+  try {
+    await telegram("deleteMessage", { chat_id: telegramUserId, message_id: data.result.message_id });
+  } catch (err) {
+    console.error("could not remove the upload carrier message", err);
+  }
+  return fileId;
 }
 
 async function telegram(method: string, body: unknown): Promise<unknown> {
@@ -63,23 +97,30 @@ async function telegram(method: string, body: unknown): Promise<unknown> {
  *  sendPhoto when the client is older. */
 export async function prepareCardMessage(telegramUserId: string, userId: number, pet: Pet): Promise<string> {
   const url = petCardUrl(userId, pet);
-  const thumbUrl = petCardUrl(userId, pet, "thumb");
-  // Both are rendered and stored before Telegram is told about them, so its own fetch is a read
-  // rather than a render.
-  const [caption] = await Promise.all([buildCaption(userId, pet), warmCard(url), warmCard(thumbUrl)]);
-  const result = (await telegram("savePreparedInlineMessage", {
-    user_id: Number(telegramUserId),
-    result: {
-      type: "photo",
-      id: `card-${userId}-${Date.now()}`,
+  const [caption, jpeg] = await Promise.all([buildCaption(userId, pet), fetchCard(url)]);
+
+  // Preferred: a file Telegram already holds, so nothing has to be downloaded from us when the
+  // message lands. The URL form stays as a fallback for the case where we could not produce or
+  // upload the bytes — it renders unreliably, but an unreliable share beats a failed one.
+  let photo: Record<string, unknown>;
+  try {
+    if (!jpeg) throw new Error("no card bytes");
+    photo = { photo_file_id: await uploadCard(telegramUserId, jpeg) };
+  } catch (err) {
+    console.error("falling back to sharing the card by URL", err);
+    photo = {
       photo_url: url,
-      thumbnail_url: thumbUrl,
+      thumbnail_url: petCardUrl(userId, pet, "thumb"),
       // Without these Telegram has to download the image before it knows what shape the bubble
       // should be, and lays out a tall portrait placeholder for a square card in the meantime.
       photo_width: CARD_SIZE.square.width,
       photo_height: CARD_SIZE.square.height,
-      caption,
-    },
+    };
+  }
+
+  const result = (await telegram("savePreparedInlineMessage", {
+    user_id: Number(telegramUserId),
+    result: { type: "photo", id: `card-${userId}-${Date.now()}`, ...photo, caption },
     allow_user_chats: true,
     allow_group_chats: true,
     allow_channel_chats: true,
@@ -91,6 +132,8 @@ export async function prepareCardMessage(telegramUserId: string, userId: number,
  *  The fallback for clients too old for the share sheet — it asks nothing of the client at all. */
 export async function sendCardToSelf(telegramUserId: string, userId: number, pet: Pet): Promise<void> {
   const url = petCardUrl(userId, pet);
-  const [caption] = await Promise.all([buildCaption(userId, pet), warmCard(url)]);
+  const [caption] = await Promise.all([buildCaption(userId, pet), fetchCard(url)]);
+  // By URL here on purpose: sendPhoto has Telegram fetch it server-side, which has always worked
+  // and saves shipping the bytes twice. The card is already rendered and stored by now.
   await telegram("sendPhoto", { chat_id: telegramUserId, photo: url, caption });
 }
