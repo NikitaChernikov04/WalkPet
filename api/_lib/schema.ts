@@ -157,6 +157,9 @@ const ADDED_COLUMNS: [table: string, column: string, definition: string][] = [
   ["pets", "bonus_steps", "INTEGER NOT NULL DEFAULT 0"],
   // Free evolution tiers earned by inviting players — added on top of the level-derived stage.
   ["pets", "evolution_bonus_tiers", "INTEGER NOT NULL DEFAULT 0"],
+  // Last local day whose steps reached the daily goal. The streak is built from this rather than
+  // from last_active_date, which merely opening the app moved forward — see recordSteps.
+  ["pets", "last_goal_date", `${DAY}`],
 ];
 
 const UNIQUE_INDEXES_AFTER_COLUMNS = [

@@ -40,6 +40,11 @@ export const MILESTONES = {
 
 type MilestoneKey = keyof typeof MILESTONES;
 
+/** The bar a local day has to clear to count as walked: the first milestone. It is what extends
+ *  the streak, what "inactive" means for stat decay, and what the evening reminder checks — one
+ *  definition so those three can never tell the player different stories. */
+export const DAILY_GOAL_STEPS = MILESTONES.food.steps;
+
 const DECAY_PER_INACTIVE_DAY = 5;
 const MAX_DECAY_DAYS = 30;
 
@@ -57,8 +62,16 @@ export interface Pet {
   happiness: number;
   intellect: number;
   strength: number;
+  /** Consecutive local days on which DAILY_GOAL_STEPS was actually walked. */
   streak_days: number;
+  /** Last local day this player was seen syncing — drives the once-per-day rollover bookkeeping,
+   *  not the streak. */
   last_active_date: string | null;
+  /** Last local day whose steps reached DAILY_GOAL_STEPS. This is what the streak is built from:
+   *  holding the earned day rather than the visited one is what stops merely opening the app from
+   *  extending it, and it is also what lets a day still count when a backfill pushes it over the
+   *  goal after the fact. */
+  last_goal_date: string | null;
   hatched_at: string | null;
   created_at: string;
   avatar_url: string | null;
@@ -93,7 +106,7 @@ export interface SyncState {
 }
 
 const PET_COLUMNS_WITHOUT_ART = `id, user_id, stage, species, rarity, level, xp, name, lifetime_steps, health, happiness,
-  intellect, strength, streak_days, last_active_date, hatched_at, created_at, avatar_status, avatar_generation_id,
+  intellect, strength, streak_days, last_active_date, last_goal_date, hatched_at, created_at, avatar_status, avatar_generation_id,
   avatar_description, avatar_seed, avatar_source_url, avatar_stage, avatar_target_stage,
   bonus_steps, evolution_bonus_tiers`;
 
@@ -279,13 +292,34 @@ export async function recordSteps(
     strength = clamp(strength + bonus, statCap);
   }
 
-  // Streak bookkeeping, plus a tamagotchi-style stat decay for each fully inactive day since
-  // this player was last seen — only computed once, the first time we see a new calendar day.
+  // The streak counts days *walked*, not days visited. It used to key off last_active_date, which
+  // every sync moved forward, so opening the app was enough to extend it — a player could hold a
+  // 30-day streak having walked nothing, while the evening reminder warned them about losing a
+  // streak that was in no danger. It is now built on last_goal_date: the most recent local day
+  // whose steps actually reached the goal.
   let streakDays = pet.streak_days;
-  if (pet.last_active_date !== date) {
-    streakDays = pet.last_active_date === prevDate ? streakDays + 1 : 1;
+  let lastGoalDate = pet.last_goal_date;
+  const dayBeforePrev = shiftDate(prevDate, -1);
 
-    let inactiveDays = yesterdaySteps < MILESTONES.food.steps ? 1 : 0;
+  // Yesterday first, and only when it has just now crossed the goal — a backfill can finalise it
+  // above the line after the day itself has ended, and that day was still walked.
+  if (yesterdaySteps >= DAILY_GOAL_STEPS && (lastGoalDate === null || lastGoalDate < prevDate)) {
+    streakDays = lastGoalDate === dayBeforePrev ? streakDays + 1 : 1;
+    lastGoalDate = prevDate;
+  }
+  if (newSteps >= DAILY_GOAL_STEPS && lastGoalDate !== date) {
+    streakDays = lastGoalDate === prevDate ? streakDays + 1 : 1;
+    lastGoalDate = date;
+  }
+  // Nothing earned today and nothing earned yesterday means the chain is broken, not merely at
+  // risk. While yesterday is still the last earned day the streak stands: today is unfinished,
+  // and that is exactly the state the evening reminder exists to rescue.
+  if (lastGoalDate !== date && lastGoalDate !== prevDate) streakDays = 0;
+
+  // A tamagotchi-style stat decay for each fully inactive day since this player was last seen —
+  // only computed once, the first time we see a new calendar day.
+  if (pet.last_active_date !== date) {
+    let inactiveDays = yesterdaySteps < DAILY_GOAL_STEPS ? 1 : 0;
     if (pet.last_active_date) {
       const gapDays = daysBetween(pet.last_active_date, date) - 1;
       inactiveDays += Math.max(0, gapDays);
@@ -369,6 +403,7 @@ export async function recordSteps(
     strength,
     streak_days: streakDays,
     last_active_date: date,
+    last_goal_date: lastGoalDate,
     hatched_at: hatchedAt,
   };
 
@@ -387,6 +422,7 @@ export async function recordSteps(
     strength !== pet.strength ||
     streakDays !== pet.streak_days ||
     date !== pet.last_active_date ||
+    lastGoalDate !== pet.last_goal_date ||
     hatchedAt !== pet.hatched_at;
 
   const writes: InStatement[] = [];
@@ -432,9 +468,9 @@ export async function recordSteps(
   if (petChanged) {
     writes.push({
       sql: `UPDATE pets SET stage = ?, species = ?, rarity = ?, level = ?, xp = ?, lifetime_steps = ?, health = ?, happiness = ?,
-            intellect = ?, strength = ?, streak_days = ?, last_active_date = ?, hatched_at = ?
+            intellect = ?, strength = ?, streak_days = ?, last_active_date = ?, last_goal_date = ?, hatched_at = ?
             WHERE user_id = ?`,
-      args: [stage, species, rarity, level, xp, lifetimeSteps, health, happiness, intellect, strength, streakDays, date, hatchedAt, userId],
+      args: [stage, species, rarity, level, xp, lifetimeSteps, health, happiness, intellect, strength, streakDays, date, lastGoalDate, hatchedAt, userId],
     });
   }
   // A sync that brought nothing new (by far the most common case when polling every 20s)
@@ -566,7 +602,7 @@ export async function resetPet(userId: number): Promise<Pet> {
       {
         sql: `UPDATE pets SET stage = 'egg', species = 'unknown', rarity = 'common', level = 0, xp = 0, name = NULL,
               lifetime_steps = 0, health = 50, happiness = 50, intellect = 10, strength = 10, streak_days = 0,
-              last_active_date = NULL, hatched_at = NULL, avatar_url = NULL, avatar_status = 'none',
+              last_active_date = NULL, last_goal_date = NULL, hatched_at = NULL, avatar_url = NULL, avatar_status = 'none',
               avatar_generation_id = NULL, avatar_description = NULL, avatar_seed = NULL, avatar_source_url = NULL,
               avatar_stage = NULL, avatar_target_stage = NULL, bonus_steps = 0
               WHERE user_id = ?`,

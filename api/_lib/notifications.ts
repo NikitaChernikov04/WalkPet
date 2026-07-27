@@ -2,7 +2,7 @@ import { db } from "./db.js";
 import { ensureSchema } from "./schema.js";
 import { localDate, shiftDate } from "./tz.js";
 import { fetchDailySteps } from "./googleFit.js";
-import { getValidGoogleAccessToken, MILESTONES, recordSteps } from "./pet-logic.js";
+import { DAILY_GOAL_STEPS, getValidGoogleAccessToken, recordSteps } from "./pet-logic.js";
 
 /** The evening window, in the player's own local time, during which a streak-risk nudge may be
  *  sent. Each player is eligible for at most one message per local day, so the window means
@@ -18,9 +18,9 @@ import { getValidGoogleAccessToken, MILESTONES, recordSteps } from "./pet-logic.
 const WINDOW_START_HOUR = 19;
 const WINDOW_END_HOUR = 23;
 
-/** A day counts toward the streak once the first milestone is reached — the same threshold
- *  recordSteps uses to decide a day was active, so the warning can never contradict the rule. */
-const DAILY_GOAL = MILESTONES.food.steps;
+/** Imported rather than restated, so the bar this warns about is by construction the same bar
+ *  that actually extends the streak. */
+const DAILY_GOAL = DAILY_GOAL_STEPS;
 
 const KIND = "streak_risk";
 
@@ -77,7 +77,7 @@ interface Candidate {
   tz_offset: number;
   pet_name: string | null;
   streak_days: number;
-  last_active_date: string | null;
+  last_goal_date: string | null;
 }
 
 export interface ReminderRun {
@@ -100,7 +100,7 @@ export async function runStreakReminders(now: number = Date.now()): Promise<Remi
     // Only players who have something to lose and a step source to check: a live streak, a
     // hatched pet, and a Google account connected. Without a refresh token there is no way to
     // know whether they walked today, so warning them would be guesswork.
-    sql: `SELECT u.id, u.telegram_id, u.tz_offset, p.name AS pet_name, p.streak_days, p.last_active_date
+    sql: `SELECT u.id, u.telegram_id, u.tz_offset, p.name AS pet_name, p.streak_days, p.last_goal_date
           FROM users u
           JOIN pets p ON p.user_id = u.id
           WHERE u.tz_offset IN (${placeholders})
@@ -114,12 +114,11 @@ export async function runStreakReminders(now: number = Date.now()): Promise<Remi
   const candidates = candidatesRes.rows as unknown as Candidate[];
   if (candidates.length === 0) return result;
 
-  // A streak whose last active day is older than yesterday is already broken — the app just
-  // hasn't recomputed it yet. Nudging those players would be a lie.
-  const live = candidates.filter((c) => {
-    const today = localDate(Number(c.tz_offset), now);
-    return c.last_active_date === today || c.last_active_date === shiftDate(today, -1);
-  });
+  // Exactly one state is worth a nudge: the last day they hit the goal was yesterday, so the
+  // streak is alive but today is still unearned. A last goal day older than that means the streak
+  // is already broken and the app simply hasn't recomputed it — warning them would be a lie. Today
+  // means they have already walked it, and the step check below would drop them anyway.
+  const live = candidates.filter((c) => c.last_goal_date === shiftDate(localDate(Number(c.tz_offset), now), -1));
 
   // One cheap lookup instead of a Google Fit call per already-notified player: the window spans
   // two hourly runs, so on the second one most candidates are expected to be filtered out here.
