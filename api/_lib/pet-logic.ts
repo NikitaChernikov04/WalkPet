@@ -1,5 +1,7 @@
 import type { InStatement } from "@libsql/client";
-import { db, ensureSchema } from "./db.js";
+import { db } from "./db.js";
+import { ensureSchema } from "./schema.js";
+import { attributeReferral, grantInviterReward, parseReferralCode } from "./referrals.js";
 import { refreshAccessToken } from "./googleFit.js";
 import { startAvatarGeneration } from "./nanobanana.js";
 import { daysBetween, localDate, shiftDate } from "./tz.js";
@@ -13,7 +15,7 @@ import {
 } from "./species.js";
 import {
   type EvolutionStage,
-  evolutionStageForLevel,
+  effectiveEvolutionStage,
   LEVEL_UP_STAT_BONUS,
   levelForXp,
   nextEvolutionStageToward,
@@ -66,6 +68,10 @@ export interface Pet {
   avatar_source_url: string | null;
   avatar_stage: EvolutionStage | null;
   avatar_target_stage: EvolutionStage | null;
+  /** Steps granted as rewards rather than walked; excluded from the XP baseline. */
+  bonus_steps: number;
+  /** Free evolution tiers earned by inviting players, added on top of the level-derived stage. */
+  evolution_bonus_tiers: number;
 }
 
 export interface PetState {
@@ -87,7 +93,8 @@ export interface SyncState {
 
 const PET_COLUMNS_WITHOUT_ART = `id, user_id, stage, species, rarity, level, xp, name, lifetime_steps, health, happiness,
   intellect, strength, streak_days, last_active_date, hatched_at, created_at, avatar_status, avatar_generation_id,
-  avatar_description, avatar_seed, avatar_source_url, avatar_stage, avatar_target_stage`;
+  avatar_description, avatar_seed, avatar_source_url, avatar_stage, avatar_target_stage,
+  bonus_steps, evolution_bonus_tiers`;
 
 const clamp = (n: number, max = 100) => Math.max(0, Math.min(max, n));
 
@@ -98,6 +105,10 @@ export interface UserContext {
   userId: number;
   tzOffset: number;
   tokens: GoogleAccountTokens | null;
+  /** True only when this call inserted the row. Referral attribution keys off this: being
+   *  brand new is what makes a referral legitimate, so an existing player can never be
+   *  retro-credited by opening an invite link. */
+  created: boolean;
 }
 
 /** Resolves the caller in a single round trip: their row id, the timezone to run their day on,
@@ -107,6 +118,7 @@ export async function getUserContext(
   telegramId: string,
   username: string | null,
   tzOffsetHint: number | null,
+  startParam: string | null = null,
 ): Promise<UserContext> {
   await ensureSchema();
   const existing = await db.execute({
@@ -125,11 +137,21 @@ export async function getUserContext(
     | undefined;
 
   if (!row) {
+    // RETURNING rather than lastInsertRowid: the latter is SQLite-only and has no Postgres
+    // equivalent, so this is one less thing to rewrite for the Supabase move.
     const result = await db.execute({
-      sql: "INSERT INTO users (telegram_id, username, tz_offset) VALUES (?, ?, ?)",
+      sql: "INSERT INTO users (telegram_id, username, tz_offset) VALUES (?, ?, ?) RETURNING id",
       args: [telegramId, username, tzOffsetHint ?? 0],
     });
-    return { userId: Number(result.lastInsertRowid), tzOffset: tzOffsetHint ?? 0, tokens: null };
+    const userId = Number((result.rows[0] as unknown as { id: number }).id);
+
+    // Referrals are attributed here and nowhere else on this path, because "the row was created
+    // by this very statement" is exactly the condition that makes the attribution trustworthy —
+    // an existing player can never be retro-credited to someone by re-opening an invite link.
+    const code = parseReferralCode(startParam);
+    if (code) await attributeReferral(userId, code);
+
+    return { userId, tzOffset: tzOffsetHint ?? 0, tokens: null, created: true };
   }
 
   const userId = Number(row.id);
@@ -148,7 +170,7 @@ export async function getUserContext(
           expiry: row.google_token_expiry ?? 0,
         }
       : null;
-  return { userId, tzOffset, tokens };
+  return { userId, tzOffset, tokens, created: false };
 }
 
 export async function upsertUser(
@@ -208,7 +230,9 @@ export async function recordSteps(userId: number, stepsToday: number, tzOffset: 
   // pet whose `xp` was thrown off by the now-removed care multiplier. Care/rarity effects
   // live elsewhere (milestone reward size below, and the stat-cap/decay-resistance bonuses),
   // never on this figure.
-  const xp = Math.max(0, lifetimeSteps - EGG_HATCH_STEPS);
+  // bonus_steps (referral head starts) is subtracted so granted steps can speed up hatching
+  // without ever inflating the level counter — that stays a 1:1 mirror of steps actually walked.
+  const xp = Math.max(0, lifetimeSteps - pet.bonus_steps - EGG_HATCH_STEPS);
   const level = levelForXp(xp);
   // Rarity permanently raises the stat ceiling on top of the level-based one, so a rarer
   // pet's care bars simply go further — this is what ties rarity to something real too.
@@ -290,7 +314,7 @@ export async function recordSteps(userId: number, stepsToday: number, tzOffset: 
     rarity = picked.rarity;
   }
 
-  const evolutionStage = evolutionStageForLevel(level);
+  const evolutionStage = effectiveEvolutionStage(level, pet.evolution_bonus_tiers);
 
   const updatedPet: PetWithoutArt = {
     ...pet,
@@ -344,6 +368,16 @@ export async function recordSteps(userId: number, stepsToday: number, tzOffset: 
   // A sync that brought nothing new (by far the most common case when polling every 20s)
   // writes nothing at all and is over after the single read batch above.
   if (writes.length > 0) await db.batch(writes, "write");
+
+  // Hatching is what confirms a referral was a real player rather than a throwaway account, so
+  // it's the moment the inviter's half of the reward is released. No-op if nobody invited them.
+  if (justHatched) {
+    try {
+      await grantInviterReward(userId);
+    } catch (err) {
+      console.error(`inviter reward failed for invitee ${userId}`, err);
+    }
+  }
 
   await syncAvatarToStage(userId, updatedPet, evolutionStage, justHatched);
 
@@ -421,7 +455,9 @@ async function syncAvatarToStage(
  *  completely clean — e.g. after removing the manual debug-step controls, to shed any steps
  *  those added that are now inseparably mixed into lifetime_steps/step_logs alongside real
  *  Google Fit data. Irreversible; the Google account link itself (on the `users` row) is
- *  untouched, so Google Fit stays connected and simply starts contributing to a fresh pet. */
+ *  untouched, so Google Fit stays connected and simply starts contributing to a fresh pet.
+ *  `evolution_bonus_tiers` also survives on purpose — those tiers were earned by inviting real
+ *  players, and resetting your own pet shouldn't confiscate them. */
 export async function resetPet(userId: number): Promise<Pet> {
   await ensureSchema();
   await db.batch(
@@ -432,7 +468,7 @@ export async function resetPet(userId: number): Promise<Pet> {
               lifetime_steps = 0, health = 50, happiness = 50, intellect = 10, strength = 10, streak_days = 0,
               last_active_date = NULL, hatched_at = NULL, avatar_url = NULL, avatar_status = 'none',
               avatar_generation_id = NULL, avatar_description = NULL, avatar_seed = NULL, avatar_source_url = NULL,
-              avatar_stage = NULL, avatar_target_stage = NULL
+              avatar_stage = NULL, avatar_target_stage = NULL, bonus_steps = 0
               WHERE user_id = ?`,
         args: [userId],
       },

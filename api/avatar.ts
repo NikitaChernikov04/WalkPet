@@ -5,7 +5,7 @@ import { resolveTelegramUser } from "./_lib/telegram.js";
 import { avatarUrlFrom, getAvatarGeneration, startAvatarGeneration } from "./_lib/nanobanana.js";
 import { processAvatarImage } from "./_lib/imageProcessing.js";
 import { buildPetPrompt } from "./_lib/species.js";
-import { evolutionStageForLevel } from "./_lib/leveling.js";
+import { effectiveEvolutionStage } from "./_lib/leveling.js";
 
 // Description is optional: an empty one means "resync to the canonical look for my current
 // rarity/evolution stage" (used by the "Обновить экипировку" action once status is already
@@ -41,7 +41,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         : (pet.avatar_seed ?? Math.floor(Math.random() * 2 ** 31));
     // A from-scratch generation draws the full outfit for the pet's current stage, so that's the
     // stage the resulting artwork depicts — recorded so evolution edits know where to resume.
-    const targetStage = evolutionStageForLevel(pet.level);
+    const targetStage = effectiveEvolutionStage(pet.level, pet.evolution_bonus_tiers);
     const prompt = buildPetPrompt(pet.species, description, pet.rarity, targetStage);
     const gen = await startAvatarGeneration(prompt, { seed });
     const url = avatarUrlFrom(gen);

@@ -37,3 +37,49 @@ export function resolveTelegramUser(initData: string | undefined, botToken: stri
   if (!initData) return null;
   return validateInitData(initData, botToken);
 }
+
+/** The payload from a `t.me/<bot>/<app>?startapp=<value>` launch, which Telegram delivers inside
+ *  initData as `start_param`. Read only after resolveTelegramUser has validated the signature —
+ *  initData is attacker-supplied until that HMAC check passes, and this value grants a reward.
+ *  Returns null for a normal launch. */
+export function startParamFrom(initData: string | undefined): string | null {
+  if (!initData) return null;
+  return new URLSearchParams(initData).get("start_param");
+}
+
+let botUsername: Promise<string | null> | null = null;
+
+/** The bot's @username, needed to build invite links. Cached for the life of the instance —
+ *  it can't change without a redeploy-worthy event. Returns null if the call fails, and callers
+ *  fall back to the configured mini-app link. */
+export function getBotUsername(): Promise<string | null> {
+  if (!botUsername) {
+    botUsername = (async () => {
+      if (!process.env.BOT_TOKEN) return null;
+      try {
+        const res = await fetch(`https://api.telegram.org/bot${process.env.BOT_TOKEN}/getMe`);
+        if (!res.ok) return null;
+        const data = (await res.json()) as { ok: boolean; result?: { username?: string } };
+        return data.result?.username ?? null;
+      } catch {
+        return null;
+      }
+    })();
+  }
+  return botUsername;
+}
+
+/** Invite link for a code.
+ *
+ *  Prefers a direct Mini App link (`?startapp=`), which drops the invitee straight into the game
+ *  and delivers the code in initData — no bot round trip, so attribution happens in the very
+ *  same request that creates their account. That form needs the app's short name, which is
+ *  configured once in @BotFather; without it we fall back to the bot deep link (`?start=ref_…`),
+ *  which always works and is attributed by the bot webhook instead. */
+export async function buildInviteLink(code: string): Promise<string> {
+  const username = await getBotUsername();
+  const shortName = process.env.TELEGRAM_APP_SHORT_NAME;
+  if (username && shortName) return `https://t.me/${username}/${shortName}?startapp=${code}`;
+  if (username) return `https://t.me/${username}?start=ref_${code}`;
+  return `${process.env.MINI_APP_URL ?? ""}`;
+}

@@ -16,7 +16,7 @@ import {
 } from "./lib/api";
 import { localDateString, msUntilLocalMidnight } from "./lib/day";
 import {
-  evolutionStageForLevel,
+  effectiveEvolutionStage,
   EVOLUTION_STAGE_LABELS,
   levelProgress,
   nextEvolutionLevel,
@@ -32,6 +32,7 @@ import GoogleFitConnect from "./components/GoogleFitConnect";
 import GoogleFitOnboarding from "./components/GoogleFitOnboarding";
 import PetNameEditor from "./components/PetNameEditor";
 import StatsScreen from "./components/StatsScreen";
+import ReferralPanel from "./components/ReferralPanel";
 import {
   Heart,
   Smile,
@@ -44,6 +45,7 @@ import {
   PawPrint,
   Trash2,
   Trophy,
+  UserPlus,
   Zap,
   BarChart3,
 } from "lucide-react";
@@ -110,6 +112,7 @@ export default function App() {
   const [stepTick, setStepTick] = useState(0);
   const [googleFitConnected, setGoogleFitConnected] = useState<boolean | null>(null);
   const [showStats, setShowStats] = useState(false);
+  const [showReferrals, setShowReferrals] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [confirmingReset, setConfirmingReset] = useState(false);
   // Tracks the latest known step count purely so the Google Fit sync can tell "did today's
@@ -275,8 +278,8 @@ export default function App() {
     // Level progress resets to 0 the instant a level-up happens — without this, that reset
     // looks like the counter randomly dropped instead of "you just leveled up".
     if (prevLevelRef.current !== null && pet.level > prevLevelRef.current) {
-      const prevEvolutionStage = evolutionStageForLevel(prevLevelRef.current);
-      const newEvolutionStage = evolutionStageForLevel(pet.level);
+      const prevEvolutionStage = effectiveEvolutionStage(prevLevelRef.current, pet.evolution_bonus_tiers);
+      const newEvolutionStage = effectiveEvolutionStage(pet.level, pet.evolution_bonus_tiers);
       if (newEvolutionStage !== prevEvolutionStage) {
         pushToast(`🧬 Питомец эволюционировал: ${EVOLUTION_STAGE_LABELS[newEvolutionStage]}! (Ур. ${pet.level})`);
       } else {
@@ -369,7 +372,26 @@ export default function App() {
           </h1>
         </div>
         <div className="header-actions">
-          <button type="button" className="stats-toggle-btn" onClick={() => setShowStats((s) => !s)} aria-label="Статистика">
+          <button
+            type="button"
+            className="stats-toggle-btn"
+            onClick={() => {
+              setShowReferrals((s) => !s);
+              setShowStats(false);
+            }}
+            aria-label="Пригласить друга"
+          >
+            <UserPlus size={18} />
+          </button>
+          <button
+            type="button"
+            className="stats-toggle-btn"
+            onClick={() => {
+              setShowStats((s) => !s);
+              setShowReferrals(false);
+            }}
+            aria-label="Статистика"
+          >
             <BarChart3 size={18} />
           </button>
           {pet.stage === "hatched" && (
@@ -387,7 +409,9 @@ export default function App() {
         onSync={() => sync(true)}
       />
 
-      {showStats ? (
+      {showReferrals ? (
+        <ReferralPanel onClose={() => setShowReferrals(false)} />
+      ) : showStats ? (
         <StatsScreen onClose={() => setShowStats(false)} />
       ) : (
         <>
@@ -482,7 +506,7 @@ function PetPanel({
   // no conversion here, so this always matches the step ring's own number exactly.
   const { into, span } = levelProgress(pet.xp, pet.level);
   const levelPct = span > 0 ? Math.min(100, (into / span) * 100) : 100;
-  const evolutionStage = evolutionStageForLevel(pet.level);
+  const evolutionStage = effectiveEvolutionStage(pet.level, pet.evolution_bonus_tiers);
   const nextUpgradeLevel = nextEvolutionLevel(pet.level);
   const avgStat = (pet.health + pet.happiness + pet.intellect + pet.strength) / 4;
   const careMultiplier = statXpMultiplier(avgStat, statCap);
@@ -525,7 +549,13 @@ function PetPanel({
         {/* Levels come far more often than new gear, so without this the pet looks stuck. */}
         {nextUpgradeLevel !== null && (
           <span className="level-evolution-hint">
-            🧬 Новый облик на ур. {nextUpgradeLevel} · {EVOLUTION_STAGE_LABELS[evolutionStageForLevel(nextUpgradeLevel)]}
+            🧬 Новый облик на ур. {nextUpgradeLevel} ·{" "}
+            {EVOLUTION_STAGE_LABELS[effectiveEvolutionStage(nextUpgradeLevel, pet.evolution_bonus_tiers)]}
+          </span>
+        )}
+        {pet.evolution_bonus_tiers > 0 && (
+          <span className="level-evolution-hint">
+            🎁 +{pet.evolution_bonus_tiers} ступен{pet.evolution_bonus_tiers === 1 ? "ь" : "и"} за приглашения
           </span>
         )}
       </div>

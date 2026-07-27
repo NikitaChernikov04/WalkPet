@@ -26,6 +26,10 @@ export interface Pet {
   avatar_source_url: string | null;
   avatar_stage: string | null;
   avatar_target_stage: string | null;
+  /** Steps granted as rewards rather than walked — excluded from the level baseline. */
+  bonus_steps: number;
+  /** Free evolution tiers earned by inviting players. */
+  evolution_bonus_tiers: number;
 }
 
 export interface PetState {
@@ -141,10 +145,51 @@ export async function resetPet(): Promise<PetState> {
   return res.json();
 }
 
+export interface InvitedFriend {
+  userId: number;
+  username: string | null;
+  petName: string | null;
+  species: string;
+  level: number;
+  hatched: boolean;
+  rewardGranted: boolean;
+  avatarGenerationId: string | null;
+}
+
+export interface ReferralSummary {
+  code: string;
+  link: string;
+  invitedCount: number;
+  confirmedCount: number;
+  bonusTiers: number;
+  maxBonusTiers: number;
+  invited: InvitedFriend[];
+  invitedByUsername: string | null;
+}
+
+export async function fetchReferrals(): Promise<ReferralSummary> {
+  const res = await fetch("/api/referrals", { headers: { ...initDataHeader() } });
+  if (!res.ok) throw new Error(`GET /api/referrals failed: ${res.status}`);
+  return res.json();
+}
+
+/** Pet artwork as a cacheable image URL rather than an inlined data URL — see api/pet-image.ts.
+ *  Used for lists (invited friends, leaderboard) where inlining would mean megabytes. */
+export function petImageUrl(userId: number, version: string | null): string {
+  return `/api/pet-image?u=${userId}&v=${encodeURIComponent(version ?? "0")}`;
+}
+
 declare global {
   interface Window {
     Telegram?: {
-      WebApp?: { initData: string; ready: () => void; expand: () => void; openLink?: (url: string) => void };
+      WebApp?: {
+        initData: string;
+        ready: () => void;
+        expand: () => void;
+        openLink?: (url: string) => void;
+        openTelegramLink?: (url: string) => void;
+        isVersionAtLeast?: (version: string) => boolean;
+      };
     };
   }
 }

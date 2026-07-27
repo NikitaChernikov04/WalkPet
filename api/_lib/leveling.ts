@@ -77,6 +77,15 @@ export function evolutionStageForLevel(level: number): EvolutionStage {
   return stage;
 }
 
+/** The stage a pet actually presents at: its level-derived tier, pushed up by any free tiers it
+ *  has been granted (one per confirmed referral — see referrals.ts). Evolution stage drives only
+ *  artwork and title, never stats or XP, which is what makes it a safe thing to hand out as a
+ *  reward: it changes how the pet looks, not how the game is balanced. */
+export function effectiveEvolutionStage(level: number, bonusTiers = 0): EvolutionStage {
+  const base = EVOLUTION_ORDER.indexOf(evolutionStageForLevel(level));
+  return EVOLUTION_ORDER[Math.min(EVOLUTION_ORDER.length - 1, base + Math.max(0, bonusTiers))];
+}
+
 /** The single next stage on the way from `from` to `target`, or null when already there.
  *  Evolution art is applied one tier at a time (each edit only adds that tier's gear delta),
  *  so a pet whose artwork fell several tiers behind catches up one sync at a time instead of

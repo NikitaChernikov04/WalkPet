@@ -276,6 +276,191 @@ body {
   margin-top: 2px;
 }
 
+/* --- Referral panel --- */
+
+.referral-panel {
+  text-align: left;
+}
+
+.referral-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.referral-head h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.referral-close {
+  background: var(--card-tint);
+  border: 2px solid var(--ink);
+  color: var(--ink);
+  font-size: 0.72rem;
+  padding: 6px 12px;
+  margin: 0;
+  box-shadow: none;
+}
+
+.referral-copy,
+.referral-empty,
+.referral-inviter {
+  font-family: "Manrope", sans-serif;
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+  line-height: 1.45;
+  margin: 0 0 12px;
+}
+
+.referral-link-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.referral-code {
+  flex: 1;
+  font-family: "Space Grotesk", monospace;
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  background: var(--card-tint);
+  border: 2px dashed var(--ink);
+  border-radius: 12px;
+  padding: 9px 12px;
+  text-align: center;
+  color: var(--ink);
+}
+
+.referral-copy-btn {
+  background: var(--card-tint);
+  border: 2px solid var(--ink);
+  color: var(--ink);
+  font-size: 0.72rem;
+  padding: 9px 12px;
+  margin: 0;
+  box-shadow: 0 2px 0 var(--ink);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.referral-share-btn {
+  width: 100%;
+  margin: 0 0 14px;
+  background: var(--sky);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.referral-share-btn:hover {
+  background: var(--sky-deep);
+}
+
+.referral-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.referral-stats > div {
+  background: var(--card-tint);
+  border: 2px solid var(--ink);
+  border-radius: 14px;
+  padding: 10px 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.referral-stats strong {
+  font-family: "Space Grotesk", monospace;
+  font-size: 1.15rem;
+}
+
+.referral-stats span {
+  font-family: "Manrope", sans-serif;
+  font-size: 0.66rem;
+  font-weight: 700;
+  color: var(--ink-faint);
+  text-align: center;
+}
+
+.referral-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.referral-list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--card-tint);
+  border: 2px solid var(--ink);
+  border-radius: 14px;
+  padding: 8px 10px;
+}
+
+.referral-list li.confirmed {
+  border-color: var(--lime);
+}
+
+.referral-list img,
+.referral-egg {
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+  object-fit: contain;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.3rem;
+}
+
+.referral-friend-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.referral-friend-text strong {
+  font-family: "Manrope", sans-serif;
+  font-size: 0.82rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.referral-friend-text span {
+  font-family: "Manrope", sans-serif;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--ink-faint);
+}
+
+.referral-granted {
+  color: var(--lime);
+  flex: 0 0 auto;
+}
+
 /* --- Name editor --- */
 
 .name-editor-toggle {

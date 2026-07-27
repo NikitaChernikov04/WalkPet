@@ -52,6 +52,13 @@ export function evolutionStageForLevel(level: number): EvolutionStage {
   return stage;
 }
 
+/** Mirrors effectiveEvolutionStage in api/_lib/leveling.ts: the level-derived tier pushed up by
+ *  free tiers earned from referrals. Stage drives artwork and title only, never stats. */
+export function effectiveEvolutionStage(level: number, bonusTiers = 0): EvolutionStage {
+  const base = EVOLUTION_ORDER.indexOf(evolutionStageForLevel(level));
+  return EVOLUTION_ORDER[Math.min(EVOLUTION_ORDER.length - 1, base + Math.max(0, bonusTiers))];
+}
+
 /** Level at which the pet next changes its look/title — drives the "next evolution" hint. */
 export function nextEvolutionLevel(level: number): number | null {
   for (const stage of EVOLUTION_ORDER) {
