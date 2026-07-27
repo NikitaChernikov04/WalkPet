@@ -17,6 +17,10 @@ import { parseTzOffset } from "./_lib/tz.js";
  *    GET  /api/pet                      → { pet, todaySteps, googleFitConnected }
  *    GET  /api/pet?action=avatar-poll   → { pet }
  *    POST /api/pet { action: "avatar" | "name" | "reset" | "share", … } → { pet, … }
+ *
+ *  This route carries a raised maxDuration in vercel.json: sharing warms the pet card through the
+ *  CDN before handing its URL to Telegram, and on a cold instance that render is several seconds
+ *  of wasm start-up — more than the 10s default leaves room for.
  */
 const postSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("avatar"), description: z.string().trim().max(300).optional() }),
