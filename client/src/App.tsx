@@ -587,11 +587,13 @@ function PetPanel({
         )}
       </div>
 
-      <PetNameEditor name={pet.name} onGenerateAi={onGenerateAiName} onSetCustom={onSetCustomName} />
-
-      <AvatarGenerator status={pet.avatar_status} onGenerate={onGenerateAvatar} />
-
-      <SharePetCard pet={pet} onToast={onToast} />
+      {/* One wrapping row for everything you can do to the pet. Each of these used to bring its
+          own spacing and its own width, which left them in ragged strips of different heights. */}
+      <div className="pet-actions">
+        <PetNameEditor name={pet.name} onGenerateAi={onGenerateAiName} onSetCustom={onSetCustomName} />
+        <AvatarGenerator status={pet.avatar_status} onGenerate={onGenerateAvatar} />
+        <SharePetCard pet={pet} onToast={onToast} />
+      </div>
 
       <div className="steps-hero">
         <StepRing todaySteps={todaySteps} />

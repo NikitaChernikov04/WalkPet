@@ -154,51 +154,68 @@ body {
   color: rgba(255, 255, 255, 0.5);
 }
 
-/* --- Share the pet card --- */
+/* --- Pet action row --- */
 
-.share-card-row {
+/* Rename, re-gear and the two share buttons are one wrapping row. They are all the same kind of
+   thing, so they get one size, one spacing rule and one flow; previously each carried its own
+   margins and its own width and they landed in ragged strips. */
+.pet-actions {
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
   gap: 8px;
-  width: 100%;
-  margin: 0 0 14px;
+  margin: 4px 0 14px;
+}
+
+/* The gap owns the spacing now — anything that brought its own margin would double it up. */
+.pet-actions > *,
+.pet-actions .name-editor-toggle,
+.pet-actions .avatar-sync-btn {
+  margin: 0;
+}
+
+/* The name editor and the describe-your-pet form expand from a pill into a full block, so they
+   take the whole width rather than trying to share a line with a button. */
+.pet-actions .name-editor,
+.pet-actions .avatar-gen {
+  flex: 1 0 100%;
 }
 
 .share-card-btn {
-  display: flex;
-  flex: 1;
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
   gap: 6px;
-  padding: 11px 14px;
-  border-radius: 14px;
+  padding: 7px 12px;
+  border-radius: 12px;
+  border: 2px solid var(--ink);
   background: var(--violet);
   color: #ffffff;
+  box-shadow: 0 2px 0 var(--ink);
   font-family: "Manrope", sans-serif;
-  font-size: 0.8rem;
+  font-size: 0.74rem;
   font-weight: 700;
-  white-space: nowrap;
 }
 
 .share-card-btn:hover {
   background: var(--violet-deep);
+  color: #ffffff;
 }
 
 .share-card-btn:disabled {
   opacity: 0.6;
 }
 
-/* Story sharing is a second destination rather than the main one, and it is only present on
-   clients new enough to have it — so it reads as an option beside the primary button, not as a
-   competing one. */
+/* Story sharing is a second destination rather than the main one, and only exists on clients new
+   enough to have it — so it reads as the quieter option next to the filled button. */
 .share-card-btn.secondary {
-  flex: 0 0 auto;
-  background: transparent;
-  border: 2px solid var(--violet);
-  color: var(--violet);
+  background: var(--card-tint);
+  color: var(--violet-deep);
 }
 
 .share-card-btn.secondary:hover {
-  background: rgba(155, 107, 255, 0.16);
+  background: var(--card-tint);
+  color: var(--violet);
 }
 
 /* --- Google Fit connect strip --- */

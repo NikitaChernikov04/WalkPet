@@ -1,6 +1,8 @@
 {
   "name": "walkpet",
   "private": true,
+  "//type": "The API is ESM. @vercel/og ships ESM only, so compiling these functions to CommonJS made a static import of it throw ERR_REQUIRE_ESM at cold start. The api sources were already written ESM-style, with .js extensions on every relative import, so this is what they were always meant to be.",
+  "type": "module",
   "workspaces": [
     "client"
   ],

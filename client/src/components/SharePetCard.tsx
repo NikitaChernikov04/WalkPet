@@ -41,16 +41,19 @@ export default function SharePetCard({ pet, onToast }: { pet: Pet; onToast: (mes
     webApp?.shareToStory?.(petCardUrl(pet, "story"), { text: STORY_TEXT });
   };
 
+  // A fragment rather than a wrapper: these belong in the same wrapping row as the rename and
+  // re-gear buttons, so that all of the pet's actions flow and wrap together instead of forming a
+  // second strip of their own at a different size.
   return (
-    <div className="share-card-row">
+    <>
       <button type="button" className="share-card-btn" onClick={share} disabled={busy}>
-        <Share2 size={15} /> {busy ? "Готовим карточку…" : "Поделиться питомцем"}
+        <Share2 size={13} /> {busy ? "Готовим…" : "Поделиться"}
       </button>
       {canStory && (
         <button type="button" className="share-card-btn secondary" onClick={shareToStory} aria-label="Поделиться в истории">
-          <Sparkles size={15} /> В историю
+          <Sparkles size={13} /> В историю
         </button>
       )}
-    </div>
+    </>
   );
 }
