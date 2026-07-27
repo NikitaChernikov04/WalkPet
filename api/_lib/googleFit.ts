@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { localDayStartMs } from "./tz.js";
+import { localDate, localDayStartMs } from "./tz.js";
 
 const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
@@ -88,16 +88,32 @@ export async function refreshAccessToken(refreshToken: string): Promise<{ access
 }
 
 interface AggregateResponse {
-  bucket?: { dataset?: { point?: { value?: { intVal?: number }[] }[] }[] }[];
+  bucket?: {
+    startTimeMillis?: string | number;
+    dataset?: { point?: { value?: { intVal?: number }[] }[] }[];
+  }[];
 }
 
-/** Total step count for the player's *local* calendar day `dateISO`, where `tzOffset` is their
- *  UTC offset in minutes east of UTC — so the count resets at their own 00:00, matching the
- *  day boundary pet-logic stores step_logs rows under. */
-export async function fetchStepsForDate(accessToken: string, dateISO: string, tzOffset: number): Promise<number> {
-  const startTimeMillis = localDayStartMs(dateISO, tzOffset);
+/** Step totals per *local* calendar day for the inclusive range [startDateISO, endDateISO], where
+ *  `tzOffset` is the player's UTC offset in minutes east of UTC — so each day's count resets at
+ *  their own 00:00, matching the boundary pet-logic stores step_logs rows under.
+ *
+ *  Asking for several days costs exactly one request, which is what makes it practical to
+ *  re-check a day that has already ended. Doing so matters: a player's last sync of the day
+ *  almost never lands at 23:59, and Google Fit itself keeps revising a day's total for a while
+ *  after the phone uploads, so the figure read while the day is still running is routinely short
+ *  of the final one. Only fetching the current day left that difference stranded for good.
+ *
+ *  Days with no recorded activity are present in the map with 0. */
+export async function fetchDailySteps(
+  accessToken: string,
+  startDateISO: string,
+  endDateISO: string,
+  tzOffset: number,
+): Promise<Map<string, number>> {
   const dayMillis = 24 * 60 * 60 * 1000;
-  const endTimeMillis = startTimeMillis + dayMillis;
+  const startTimeMillis = localDayStartMs(startDateISO, tzOffset);
+  const endTimeMillis = localDayStartMs(endDateISO, tzOffset) + dayMillis;
 
   const res = await fetch(FITNESS_AGGREGATE_URL, {
     method: "POST",
@@ -120,8 +136,16 @@ export async function fetchStepsForDate(accessToken: string, dateISO: string, tz
   if (!res.ok) throw new Error(`google fit aggregate failed: ${res.status} ${await res.text()}`);
 
   const data = (await res.json()) as AggregateResponse;
-  let total = 0;
+  const byDate = new Map<string, number>();
   for (const bucket of data.bucket ?? []) {
+    // Each bucket is keyed by the instant it starts, which is a local midnight by construction —
+    // mapping it back through the same offset is what pins a bucket to the right calendar day,
+    // rather than trusting the buckets to arrive in order and counting them off.
+    const bucketStart = Number(bucket.startTimeMillis ?? NaN);
+    if (!Number.isFinite(bucketStart)) continue;
+    const date = localDate(tzOffset, bucketStart);
+
+    let total = 0;
     for (const dataset of bucket.dataset ?? []) {
       for (const point of dataset.point ?? []) {
         for (const value of point.value ?? []) {
@@ -129,6 +153,7 @@ export async function fetchStepsForDate(accessToken: string, dateISO: string, tz
         }
       }
     }
+    byDate.set(date, total);
   }
-  return total;
+  return byDate;
 }

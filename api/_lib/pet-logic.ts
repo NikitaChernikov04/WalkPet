@@ -191,35 +191,64 @@ export async function getOrCreatePet(userId: number): Promise<Pet> {
   return created.rows[0] as unknown as Pet;
 }
 
-/** Records today's absolute step count for a user and applies game rules.
+/** Records absolute step counts for a user and applies game rules.
  *  `stepsToday` is the cumulative count for the *player's local* day (the client re-sends the
  *  running total, so we take the max to stay idempotent against retries), and `tzOffset` is what
  *  defines which local day that is.
  *
+ *  `stepsYesterday` closes a hole that used to swallow the tail of every day. Only the current
+ *  day was ever fetched, so whatever was walked between a player's last sync and their local
+ *  midnight — plus whatever Google Fit revised upward after the fact, which it routinely does —
+ *  was stranded the moment the day rolled over and never counted anywhere: not on the ring, not
+ *  in lifetime steps, not in the weekly total, and not in the "was yesterday active" test that
+ *  drives stat decay. Yesterday is therefore reconciled on every sync, by the same max() rule, so
+ *  a day is finalised by the first sync after it ends rather than by whenever the player last
+ *  happened to have the app open. Days before that are left alone: their totals are already part
+ *  of a decided streak, and quietly rewriting settled history is worse than a stale number.
+ *
  *  This is the hot path — it runs on every 20-second sync — so it reads everything it needs in
  *  one batched round trip, writes at most one more, and short-circuits entirely when a sync
  *  brings nothing new (which is most of them). */
-export async function recordSteps(userId: number, stepsToday: number, tzOffset: number): Promise<SyncState> {
+export async function recordSteps(
+  userId: number,
+  stepsToday: number,
+  tzOffset: number,
+  stepsYesterday?: number,
+): Promise<SyncState> {
   await ensureSchema();
   const date = localDate(tzOffset);
   const prevDate = shiftDate(date, -1);
+  const thisWeek = weekStart(date);
+  const prevWeek = weekStart(prevDate);
 
-  const [petRes, todayRes, prevRes] = await db.batch(
+  // One window read covering both days in play and every day of the week(s) they belong to — at
+  // most eight rows. That is the same round trip as the two single-day reads it replaces, and it
+  // additionally makes the weekly total recomputable from scratch (see below).
+  const [petRes, logsRes] = await db.batch(
     [
       { sql: `SELECT ${PET_COLUMNS_WITHOUT_ART} FROM pets WHERE user_id = ?`, args: [userId] },
-      { sql: "SELECT steps, milestones_applied FROM step_logs WHERE user_id = ? AND date = ?", args: [userId, date] },
-      { sql: "SELECT steps FROM step_logs WHERE user_id = ? AND date = ?", args: [userId, prevDate] },
+      {
+        sql: "SELECT date, steps, milestones_applied FROM step_logs WHERE user_id = ? AND date >= ? AND date <= ?",
+        args: [userId, prevWeek, date],
+      },
     ],
     "read",
   );
 
   const pet = (petRes.rows[0] as unknown as PetWithoutArt | undefined) ?? (await getOrCreatePet(userId));
-  const row = todayRes.rows[0] as unknown as { steps: number; milestones_applied: string } | undefined;
-  const yesterdaySteps = Number((prevRes.rows[0] as unknown as { steps: number } | undefined)?.steps ?? 0);
 
-  const previousSteps = Number(row?.steps ?? 0);
+  const logs = new Map<string, { steps: number; milestones: string }>();
+  for (const r of logsRes.rows as unknown as { date: string; steps: number; milestones_applied: string | null }[]) {
+    logs.set(r.date, { steps: Number(r.steps), milestones: r.milestones_applied ?? "" });
+  }
+
+  const previousSteps = logs.get(date)?.steps ?? 0;
+  const previousPrevSteps = logs.get(prevDate)?.steps ?? 0;
   const newSteps = Math.max(previousSteps, stepsToday);
-  const delta = newSteps - previousSteps;
+  // Callers without a figure for yesterday (anything not driven by Google Fit) leave it untouched
+  // rather than asserting zero, which would otherwise read as "that day was inactive".
+  const yesterdaySteps = stepsYesterday === undefined ? previousPrevSteps : Math.max(previousPrevSteps, stepsYesterday);
+  const delta = newSteps - previousSteps + (yesterdaySteps - previousPrevSteps);
 
   let { health, happiness, intellect, strength } = pet;
   const lifetimeSteps = pet.lifetime_steps + delta;
@@ -276,19 +305,28 @@ export async function recordSteps(userId: number, stepsToday: number, tzOffset: 
   // figures so it can never look like a step-count mismatch.
   const careMultiplier = statXpMultiplier((health + happiness + intellect + strength) / 4, statCap);
 
-  const appliedBefore = new Set((row?.milestones_applied ?? "").split(",").filter(Boolean));
-  const appliedNow = new Set(appliedBefore);
-  for (const [key, milestone] of Object.entries(MILESTONES) as [MilestoneKey, (typeof MILESTONES)[MilestoneKey]][]) {
-    if (level < milestone.minLevel) continue;
-    if (newSteps >= milestone.steps && !appliedBefore.has(key)) {
-      appliedNow.add(key);
+  // Awards every milestone a day's final total reaches but that hasn't been paid for that day yet.
+  // Run for yesterday as well, because backfilling its steps can push it past a threshold it was
+  // short of while it was still running — the player did walk it, so it is owed.
+  const awardMilestones = (steps: number, already: string): Set<string> => {
+    const applied = new Set(already.split(",").filter(Boolean));
+    for (const [key, milestone] of Object.entries(MILESTONES) as [MilestoneKey, (typeof MILESTONES)[MilestoneKey]][]) {
+      if (level < milestone.minLevel) continue;
+      if (steps < milestone.steps || applied.has(key)) continue;
+      applied.add(key);
       const gain = Math.max(1, Math.round(milestone.amount * careMultiplier));
       if (milestone.stat === "health") health = clamp(health + gain, statCap);
       if (milestone.stat === "happiness") happiness = clamp(happiness + gain, statCap);
       if (milestone.stat === "strength") strength = clamp(strength + gain, statCap);
       if (milestone.stat === "intellect") intellect = clamp(intellect + gain, statCap);
     }
-  }
+    return applied;
+  };
+
+  const prevApplied = logs.get(prevDate)?.milestones ?? "";
+  const prevAppliedNow = yesterdaySteps > previousPrevSteps ? awardMilestones(yesterdaySteps, prevApplied) : null;
+  const appliedBefore = new Set((logs.get(date)?.milestones ?? "").split(",").filter(Boolean));
+  const appliedNow = awardMilestones(newSteps, logs.get(date)?.milestones ?? "");
 
   if (streakDays > 0 && streakDays % 7 === 0 && streakDays !== pet.streak_days) {
     happiness = clamp(happiness + 10, statCap);
@@ -333,7 +371,8 @@ export async function recordSteps(userId: number, stepsToday: number, tzOffset: 
     hatched_at: hatchedAt,
   };
 
-  const stepLogChanged = delta > 0 || appliedNow.size !== appliedBefore.size;
+  const stepLogChanged = newSteps > previousSteps || appliedNow.size !== appliedBefore.size;
+  const prevLogChanged = prevAppliedNow !== null;
   const petChanged =
     stage !== pet.stage ||
     species !== pet.species ||
@@ -357,16 +396,37 @@ export async function recordSteps(userId: number, stepsToday: number, tzOffset: 
       args: [userId, date, newSteps, [...appliedNow].join(",")],
     });
   }
-  if (delta > 0) {
-    // The weekly leaderboard total, kept current incrementally instead of by a nightly job:
-    // it rides along in this same transaction, so it can never drift from step_logs, and the
-    // leaderboard is always live at the cost of zero extra round trips.
+  if (prevLogChanged) {
     writes.push({
-      sql: `INSERT INTO step_weeks (user_id, week_start, steps) VALUES (?, ?, ?)
-            ON CONFLICT(user_id, week_start) DO UPDATE SET steps = step_weeks.steps + excluded.steps,
-            updated_at = CURRENT_TIMESTAMP`,
-      args: [userId, weekStart(date), delta],
+      sql: `INSERT INTO step_logs (user_id, date, steps, milestones_applied) VALUES (?, ?, ?, ?)
+            ON CONFLICT(user_id, date) DO UPDATE SET steps = excluded.steps, milestones_applied = excluded.milestones_applied`,
+      args: [userId, prevDate, yesterdaySteps, [...prevAppliedNow!].join(",")],
     });
+  }
+  if (delta > 0) {
+    // The weekly leaderboard total, kept current in this same transaction instead of by a nightly
+    // job, so it can never lag behind step_logs and costs no extra round trip.
+    //
+    // Written as an absolute total recomputed from the window read above, not as "add this
+    // delta". Adding was wrong in two ways: two syncs racing (the client polls every 20s, and the
+    // reminder job can land on the same player) both computed a delta from the same pre-read and
+    // both added it, permanently inflating the leaderboard with no way to notice or recover; and
+    // a backfill can land in *last* week, which a single delta bucketed under this week's Monday
+    // silently misfiled. Recomputing makes the row a pure function of step_logs, so any drift
+    // already banked is corrected by the next sync that moves at all.
+    const finalSteps = new Map([...logs].map(([d, v]) => [d, v.steps] as const));
+    finalSteps.set(date, newSteps);
+    finalSteps.set(prevDate, yesterdaySteps);
+    for (const week of new Set([thisWeek, prevWeek])) {
+      let total = 0;
+      for (const [d, steps] of finalSteps) if (weekStart(d) === week) total += steps;
+      writes.push({
+        sql: `INSERT INTO step_weeks (user_id, week_start, steps) VALUES (?, ?, ?)
+              ON CONFLICT(user_id, week_start) DO UPDATE SET steps = excluded.steps,
+              updated_at = CURRENT_TIMESTAMP`,
+        args: [userId, week, total],
+      });
+    }
   }
   if (petChanged) {
     writes.push({

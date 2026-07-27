@@ -1,7 +1,7 @@
 import { db } from "./db.js";
 import { ensureSchema } from "./schema.js";
 import { localDate, shiftDate } from "./tz.js";
-import { fetchStepsForDate } from "./googleFit.js";
+import { fetchDailySteps } from "./googleFit.js";
 import { getValidGoogleAccessToken, MILESTONES, recordSteps } from "./pet-logic.js";
 
 /** The evening window, in the player's own local time, during which a streak-risk nudge may be
@@ -144,8 +144,9 @@ export async function runStreakReminders(now: number = Date.now()): Promise<Remi
       // Recording rather than merely reading: the player may not have opened the app all day, so
       // this is also what keeps their steps, streak and level current. The notification decision
       // then rests on the same authoritative numbers the app itself would have produced.
-      const steps = await fetchStepsForDate(accessToken, today, tzOffset);
-      const { todaySteps } = await recordSteps(userId, steps, tzOffset);
+      const yesterday = shiftDate(today, -1);
+      const steps = await fetchDailySteps(accessToken, yesterday, today, tzOffset);
+      const { todaySteps } = await recordSteps(userId, steps.get(today) ?? 0, tzOffset, steps.get(yesterday));
 
       if (todaySteps >= DAILY_GOAL) {
         result.skippedGoalMet++;
