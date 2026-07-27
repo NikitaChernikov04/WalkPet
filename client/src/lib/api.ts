@@ -204,7 +204,7 @@ export function petImageUrl(userId: number, version: string | null): string {
  *  `v` covers everything the card draws, so a pet that has just levelled up is never shared as
  *  its older self out of a cache. Kept in step with petCardUrl in api/_lib/share.ts. */
 export function petCardUrl(pet: Pet | PetSync, format: "square" | "story" = "square"): string {
-  const version = `${pet.level}.${pet.streak_days}.${pet.lifetime_steps}.${pet.avatar_generation_id ?? "0"}`;
+  const version = `${pet.level}.${pet.streak_days}.${pet.lifetime_steps}.${pet.rarity}.${pet.avatar_generation_id ?? "0"}`;
   const query = new URLSearchParams({ v: version });
   if (format === "story") query.set("f", "story");
   return `${window.location.origin}/card/${pet.user_id}.jpg?${query.toString()}`;

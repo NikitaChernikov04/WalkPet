@@ -40,13 +40,24 @@ const RARITY_LABEL: Record<Rarity, string> = {
   legendary: "Легендарный",
 };
 
-export type CardFormat = "square" | "story";
+export type CardFormat = "square" | "story" | "thumb";
+
+/** Everything the card draws, so a stored one is discarded exactly when it stops being accurate.
+ *  Doubles as the URL's cache-buster. */
+export function cardVersion(pet: Pet): string {
+  return `${pet.level}.${pet.streak_days}.${pet.lifetime_steps}.${pet.rarity}.${pet.avatar_generation_id ?? "0"}`;
+}
 
 /** Story canvases are 9:16. Rendering that size here rather than letting Telegram letterbox a
  *  square means the card fills the screen instead of floating in bars. */
 export const CARD_SIZE: Record<CardFormat, { width: number; height: number; art: number; name: number }> = {
   square: { width: 1080, height: 1080, art: 460, name: 88 },
   story: { width: 1080, height: 1920, art: 620, name: 104 },
+  // A real thumbnail. An inline result has to name one, and pointing it at the full-size card
+  // made Telegram fetch a 110KB image twice over just to show a preview. Rendered by shrinking
+  // the square rather than by laying the card out again at a twelfth of the size, where every
+  // fixed padding and font size in here would have had to be re-tuned to still look like itself.
+  thumb: { width: 320, height: 320, art: 0, name: 0 },
 };
 
 /** Keeps only what the two bundled faces can actually draw: Latin, Cyrillic, digits and a little
@@ -145,6 +156,11 @@ function artwork(pet: Pet, size: number, accent: string): Element {
 }
 
 export async function renderPetCard(pet: Pet, format: CardFormat = "square"): Promise<Buffer> {
+  if (format === "thumb") {
+    const square = await renderPetCard(pet, "square");
+    return sharp(square).resize(CARD_SIZE.thumb.width, CARD_SIZE.thumb.height).jpeg({ quality: 82 }).toBuffer();
+  }
+
   const { width, height, art, name } = CARD_SIZE[format];
   const scale = format === "story" ? 1.15 : 1;
   const accent = RARITY_COLOR[pet.rarity] ?? RARITY_COLOR.common;

@@ -106,6 +106,21 @@ const TABLES: [name: string, ddl: string][] = [
     )`,
   ],
   [
+    // Rendered share cards, kept because the render is the slow part and Telegram is the one
+    // fetching the URL: on a cold instance it costs seconds of wasm start-up and font parsing,
+    // and a fetcher that gives up partway through stores a half-drawn image. One row per player
+    // per format, replaced whenever `version` no longer matches what the pet now looks like.
+    "pet_cards",
+    `CREATE TABLE IF NOT EXISTS pet_cards (
+      user_id ${FK} NOT NULL REFERENCES users(id),
+      format TEXT NOT NULL,
+      version TEXT NOT NULL,
+      image TEXT NOT NULL,
+      created_at ${TS},
+      PRIMARY KEY (user_id, format)
+    )`,
+  ],
+  [
     // Idempotency ledger for pushes: the primary key is what guarantees at most one message of
     // a given kind per player per local day, however often the scheduler fires.
     "notifications_sent",

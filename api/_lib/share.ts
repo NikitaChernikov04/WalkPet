@@ -1,4 +1,4 @@
-import { CARD_SIZE, type CardFormat } from "./card.js";
+import { CARD_SIZE, cardVersion, type CardFormat } from "./card.js";
 import type { Pet } from "./pet-logic.js";
 import { buildInviteLink } from "./telegram.js";
 import { getOrCreateReferralCode } from "./referrals.js";
@@ -13,9 +13,8 @@ const origin = () => (process.env.MINI_APP_URL ?? "").replace(/\/+$/, "");
 /** Versioned by everything the card actually draws, so a freshly levelled pet is never shared as
  *  its older self out of a cache. */
 export function petCardUrl(userId: number, pet: Pet, format: CardFormat = "square"): string {
-  const version = `${pet.level}.${pet.streak_days}.${pet.lifetime_steps}.${pet.avatar_generation_id ?? "0"}`;
-  const query = new URLSearchParams({ v: version });
-  if (format === "story") query.set("f", "story");
+  const query = new URLSearchParams({ v: cardVersion(pet) });
+  if (format !== "square") query.set("f", format);
   return `${origin()}/card/${userId}.jpg?${query.toString()}`;
 }
 
@@ -64,14 +63,17 @@ async function telegram(method: string, body: unknown): Promise<unknown> {
  *  sendPhoto when the client is older. */
 export async function prepareCardMessage(telegramUserId: string, userId: number, pet: Pet): Promise<string> {
   const url = petCardUrl(userId, pet);
-  const [caption] = await Promise.all([buildCaption(userId, pet), warmCard(url)]);
+  const thumbUrl = petCardUrl(userId, pet, "thumb");
+  // Both are rendered and stored before Telegram is told about them, so its own fetch is a read
+  // rather than a render.
+  const [caption] = await Promise.all([buildCaption(userId, pet), warmCard(url), warmCard(thumbUrl)]);
   const result = (await telegram("savePreparedInlineMessage", {
     user_id: Number(telegramUserId),
     result: {
       type: "photo",
       id: `card-${userId}-${Date.now()}`,
       photo_url: url,
-      thumbnail_url: url,
+      thumbnail_url: thumbUrl,
       // Without these Telegram has to download the image before it knows what shape the bubble
       // should be, and lays out a tall portrait placeholder for a square card in the meantime.
       photo_width: CARD_SIZE.square.width,
