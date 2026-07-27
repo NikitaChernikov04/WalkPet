@@ -68,39 +68,35 @@ export async function fetchPet(): Promise<PetState & { googleFitConnected: boole
   return res.json();
 }
 
-export async function requestAvatar(description: string): Promise<{ pet: Pet }> {
-  const res = await fetch("/api/avatar", {
+/** Every action on your own pet goes through POST /api/pet with an `action` discriminator —
+ *  they all authenticate the same way and all answer with the same pet object, so they share
+ *  one route (see api/pet.ts for why the endpoint count matters). */
+async function petAction<T>(body: Record<string, unknown>): Promise<T> {
+  const res = await fetch("/api/pet", {
     method: "POST",
     headers: { "Content-Type": "application/json", ...initDataHeader() },
-    body: JSON.stringify({ description }),
+    body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(`POST /api/avatar failed: ${res.status}`);
+  if (!res.ok) throw new Error(`POST /api/pet (${body.action}) failed: ${res.status}`);
   return res.json();
 }
 
-export async function generateAiPetName(): Promise<{ pet: Pet }> {
-  const res = await fetch("/api/pet-name", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...initDataHeader() },
-    body: JSON.stringify({ mode: "ai" }),
-  });
-  if (!res.ok) throw new Error(`POST /api/pet-name failed: ${res.status}`);
-  return res.json();
+export function requestAvatar(description: string): Promise<{ pet: Pet }> {
+  return petAction({ action: "avatar", description });
 }
 
-export async function setCustomPetName(name: string): Promise<{ pet: Pet }> {
-  const res = await fetch("/api/pet-name", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...initDataHeader() },
-    body: JSON.stringify({ mode: "custom", name }),
-  });
-  if (!res.ok) throw new Error(`POST /api/pet-name failed: ${res.status}`);
-  return res.json();
+/** Omitting the name asks the server to come up with one. */
+export function generateAiPetName(): Promise<{ pet: Pet }> {
+  return petAction({ action: "name" });
+}
+
+export function setCustomPetName(name: string): Promise<{ pet: Pet }> {
+  return petAction({ action: "name", name });
 }
 
 export async function pollAvatar(): Promise<{ pet: Pet }> {
-  const res = await fetch("/api/avatar", { headers: { ...initDataHeader() } });
-  if (!res.ok) throw new Error(`GET /api/avatar failed: ${res.status}`);
+  const res = await fetch("/api/pet?action=avatar-poll", { headers: { ...initDataHeader() } });
+  if (!res.ok) throw new Error(`GET /api/pet?action=avatar-poll failed: ${res.status}`);
   return res.json();
 }
 
@@ -136,13 +132,8 @@ export async function getStepHistory(params: { range?: 7 | 30; month?: string })
 
 /** Irreversible: wipes the pet back to a fresh egg and clears its step history. Google Fit
  *  stays connected and simply starts contributing to the new pet from zero. */
-export async function resetPet(): Promise<PetState> {
-  const res = await fetch("/api/pet-reset", {
-    method: "POST",
-    headers: { ...initDataHeader() },
-  });
-  if (!res.ok) throw new Error(`POST /api/pet-reset failed: ${res.status}`);
-  return res.json();
+export function resetPet(): Promise<PetState> {
+  return petAction({ action: "reset" });
 }
 
 export interface InvitedFriend {
