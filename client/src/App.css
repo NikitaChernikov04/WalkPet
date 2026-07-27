@@ -42,6 +42,10 @@ html {
   /* iOS otherwise inflates text on its own when it decides a column is too narrow, which changes
      every measurement the layout is built on. */
   -webkit-text-size-adjust: 100%;
+  /* Both elements, not just body: whether the body's value reaches the viewport depends on
+     propagation rules that WebKit does not honour the way Chrome does, and the observed result
+     was a page that still scrolled sideways with body alone set. */
+  overflow-x: hidden;
 }
 
 body {
@@ -411,6 +415,11 @@ body {
   border: 2px solid var(--ink);
   border-radius: 14px;
   padding: 8px 10px;
+  /* A flex item's automatic minimum size is only supposed to bind on the main axis, which for
+     this column list is the vertical one. WebKit applies it across too, so without these a row
+     refuses to shrink below the width of its widest text and pushes the whole page sideways. */
+  min-width: 0;
+  max-width: 100%;
 }
 
 .player-row.me {
@@ -445,6 +454,16 @@ body {
   flex-direction: column;
   min-width: 0;
   flex: 1;
+  /* The ellipsis below can only bite against a box that is actually allowed to be narrower than
+     its text; this is that box. */
+  overflow: hidden;
+}
+
+/* Same WebKit quirk as on the row: these are flex items in a column, so their automatic minimum
+   size should not apply to width, and where it does the ellipsis never triggers. */
+.player-text > * {
+  min-width: 0;
+  max-width: 100%;
 }
 
 .player-text strong {
@@ -643,6 +662,14 @@ body {
   flex-direction: column;
   min-width: 0;
   flex: 1;
+  overflow: hidden;
+}
+
+/* Same WebKit cross-axis minimum as on the leaderboard rows — an invited friend can have just as
+   long a handle. */
+.referral-friend-text > * {
+  min-width: 0;
+  max-width: 100%;
 }
 
 .referral-friend-text strong {
@@ -658,6 +685,9 @@ body {
   font-size: 0.68rem;
   font-weight: 600;
   color: var(--ink-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .referral-granted {

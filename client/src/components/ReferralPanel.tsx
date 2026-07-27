@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Copy, Gift, Share2, UserPlus, Users } from "lucide-react";
 import { fetchReferrals, petImageUrl, type ReferralSummary } from "../lib/api";
+import { shortHandle } from "../lib/handle";
 
 const SHARE_TEXT =
   "Я выгуливаю питомца в WalkPet — он растёт от моих реальных шагов. " +
@@ -99,7 +100,7 @@ export default function ReferralPanel({ onClose }: { onClose: () => void }) {
               <div className="referral-friend-text">
                 <strong>{friend.petName ?? (friend.hatched ? friend.species : "Яйцо")}</strong>
                 <span>
-                  {friend.username ? `@${friend.username}` : `Игрок #${friend.userId}`}
+                  {shortHandle(friend.username, friend.userId)}
                   {friend.hatched ? ` · ур. ${friend.level}` : " · ещё не вылупился"}
                 </span>
               </div>

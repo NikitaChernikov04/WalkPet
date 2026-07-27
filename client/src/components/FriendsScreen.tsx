@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Footprints, Globe, Trophy, Users } from "lucide-react";
 import { fetchSocial, petImageUrl, type PlayerRow, type SocialSnapshot } from "../lib/api";
+import { shortHandle } from "../lib/handle";
 
 type Tab = "friends" | "global";
 
@@ -33,7 +34,7 @@ function PlayerCard({ player, place }: { player: PlayerRow; place: number }) {
       <div className="player-text">
         <strong>{player.petName ?? (player.hatched ? player.species : "Яйцо")}</strong>
         <span>
-          {player.username ? `@${player.username}` : `Игрок #${player.userId}`}
+          {shortHandle(player.username, player.userId)}
           {player.hatched ? ` · ур. ${player.level}` : ""}
         </span>
       </div>
