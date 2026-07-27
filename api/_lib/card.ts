@@ -1,10 +1,11 @@
 import fs from "node:fs";
 import path from "node:path";
 import { ImageResponse } from "@vercel/og";
+import sharp from "sharp";
 import type { Pet } from "./pet-logic.js";
 import type { Rarity } from "./species.js";
 
-/** Renders a shareable pet card to PNG.
+/** Renders a shareable pet card to JPEG.
  *
  *  Server-side rather than on the client, because both destinations need a URL Telegram itself
  *  can fetch: a prepared inline message carries `photo_url`, and story sharing takes `media_url`.
@@ -240,5 +241,12 @@ export async function renderPetCard(pet: Pet, format: CardFormat = "square"): Pr
   });
 
   const response = new ImageResponse(card as never, { width, height, fonts: loadFonts() });
-  return Buffer.from(await response.arrayBuffer());
+  const png = Buffer.from(await response.arrayBuffer());
+
+  // JPEG, not the PNG satori produces, because InlineQueryResultPhoto requires it: "Photo must be
+  // in JPEG format." sendPhoto converts a PNG quietly, which is why sending the card straight to a
+  // chat always worked while the same URL in a prepared inline message arrived as a sliver of
+  // image above an empty bubble. The card has no transparency, so nothing is lost — and the file
+  // comes out roughly a third the size, which Telegram fetches that much faster.
+  return sharp(png).jpeg({ quality: 90, chromaSubsampling: "4:4:4" }).toBuffer();
 }

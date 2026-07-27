@@ -13,7 +13,7 @@
   },
   "rewrites": [
     {
-      "source": "/card/:user(\\d+).png",
+      "source": "/card/:user(\\d+).jpg",
       "destination": "/api/pet-card?u=:user"
     }
   ]

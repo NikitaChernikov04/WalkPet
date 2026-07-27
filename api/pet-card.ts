@@ -4,7 +4,7 @@ import { ensureSchema } from "./_lib/schema.js";
 import { renderPetCard, type CardFormat } from "./_lib/card.js";
 import type { Pet } from "./_lib/pet-logic.js";
 
-/** A shareable PNG of a player's pet.
+/** A shareable JPEG of a player's pet.
  *
  *  Unauthenticated for the same reason /api/pet-image is: this URL exists precisely so that
  *  Telegram's servers can fetch it — a prepared inline message references it as `photo_url` and
@@ -12,7 +12,7 @@ import type { Pet } from "./_lib/pet-logic.js";
  *  name, species, level and step count and nothing that identifies the person behind it; the
  *  Telegram username is deliberately left off.
  *
- *  Reachable as /card/<userId>.png (see the rewrite in vercel.json) because Telegram is happier
+ *  Reachable as /card/<userId>.jpg (see the rewrite in vercel.json) because Telegram is happier
  *  with photo URLs that look like image files. `v` is a cache-buster the caller composes from the
  *  pet's mutable fields; `f=story` renders the 9:16 variant. */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -28,11 +28,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!pet) return res.status(404).json({ error: "no pet" });
   if (pet.stage !== "hatched") return res.status(409).json({ error: "pet has not hatched" });
 
-  const png = await renderPetCard(pet, format);
-  res.setHeader("Content-Type", "image/png");
-  res.setHeader("Content-Length", String(png.length));
+  const jpeg = await renderPetCard(pet, format);
+  res.setHeader("Content-Type", "image/jpeg");
+  res.setHeader("Content-Length", String(jpeg.length));
   // Short rather than immutable: level, streak and step count all move, and `v` is only as good
   // as the caller's guess at them. Long enough that a share flow renders once, not three times.
   res.setHeader("Cache-Control", "public, max-age=600, s-maxage=600");
-  res.status(200).send(png);
+  res.status(200).send(jpeg);
 }

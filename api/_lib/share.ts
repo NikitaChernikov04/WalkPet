@@ -16,7 +16,7 @@ export function petCardUrl(userId: number, pet: Pet, format: CardFormat = "squar
   const version = `${pet.level}.${pet.streak_days}.${pet.lifetime_steps}.${pet.avatar_generation_id ?? "0"}`;
   const query = new URLSearchParams({ v: version });
   if (format === "story") query.set("f", "story");
-  return `${origin()}/card/${userId}.png?${query.toString()}`;
+  return `${origin()}/card/${userId}.jpg?${query.toString()}`;
 }
 
 /** The card alone is a dead end for whoever receives it, so the caption carries the sender's own

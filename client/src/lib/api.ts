@@ -197,7 +197,7 @@ export function petImageUrl(userId: number, version: string | null): string {
   return `/api/pet-image?u=${userId}&v=${encodeURIComponent(version ?? "0")}`;
 }
 
-/** Absolute URL of the shareable pet card PNG — absolute because shareToStory hands it to
+/** Absolute URL of the shareable pet card JPEG — absolute because shareToStory hands it to
  *  Telegram, which fetches it from its own servers and cannot resolve a relative path. The Mini
  *  App is served from the same origin as the API, so the client can compose this itself.
  *
@@ -207,7 +207,7 @@ export function petCardUrl(pet: Pet | PetSync, format: "square" | "story" = "squ
   const version = `${pet.level}.${pet.streak_days}.${pet.lifetime_steps}.${pet.avatar_generation_id ?? "0"}`;
   const query = new URLSearchParams({ v: version });
   if (format === "story") query.set("f", "story");
-  return `${window.location.origin}/card/${pet.user_id}.png?${query.toString()}`;
+  return `${window.location.origin}/card/${pet.user_id}.jpg?${query.toString()}`;
 }
 
 /** Stages the card as an inline message for Telegram's own share sheet. */
