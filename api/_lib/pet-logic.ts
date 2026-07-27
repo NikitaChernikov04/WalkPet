@@ -4,7 +4,7 @@ import { ensureSchema } from "./schema.js";
 import { attributeReferral, grantInviterReward, parseReferralCode } from "./referrals.js";
 import { refreshAccessToken } from "./googleFit.js";
 import { startAvatarGeneration } from "./nanobanana.js";
-import { daysBetween, localDate, shiftDate } from "./tz.js";
+import { daysBetween, localDate, shiftDate, weekStart } from "./tz.js";
 import {
   buildEvolutionEditPrompt,
   buildPetPrompt,
@@ -357,6 +357,17 @@ export async function recordSteps(userId: number, stepsToday: number, tzOffset: 
       args: [userId, date, newSteps, [...appliedNow].join(",")],
     });
   }
+  if (delta > 0) {
+    // The weekly leaderboard total, kept current incrementally instead of by a nightly job:
+    // it rides along in this same transaction, so it can never drift from step_logs, and the
+    // leaderboard is always live at the cost of zero extra round trips.
+    writes.push({
+      sql: `INSERT INTO step_weeks (user_id, week_start, steps) VALUES (?, ?, ?)
+            ON CONFLICT(user_id, week_start) DO UPDATE SET steps = step_weeks.steps + excluded.steps,
+            updated_at = CURRENT_TIMESTAMP`,
+      args: [userId, weekStart(date), delta],
+    });
+  }
   if (petChanged) {
     writes.push({
       sql: `UPDATE pets SET stage = ?, species = ?, rarity = ?, level = ?, xp = ?, lifetime_steps = ?, health = ?, happiness = ?,
@@ -463,6 +474,9 @@ export async function resetPet(userId: number): Promise<Pet> {
   await db.batch(
     [
       { sql: "DELETE FROM step_logs WHERE user_id = ?", args: [userId] },
+      // Must go with step_logs: step_weeks is derived from it, so leaving it behind would show
+      // a wiped player still holding a leaderboard score built from steps that no longer exist.
+      { sql: "DELETE FROM step_weeks WHERE user_id = ?", args: [userId] },
       {
         sql: `UPDATE pets SET stage = 'egg', species = 'unknown', rarity = 'common', level = 0, xp = 0, name = NULL,
               lifetime_steps = 0, health = 50, happiness = 50, intellect = 10, strength = 10, streak_days = 0,

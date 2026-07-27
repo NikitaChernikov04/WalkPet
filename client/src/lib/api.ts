@@ -173,6 +173,33 @@ export async function fetchReferrals(): Promise<ReferralSummary> {
   return res.json();
 }
 
+export interface PlayerRow {
+  userId: number;
+  username: string | null;
+  petName: string | null;
+  species: string;
+  rarity: Rarity;
+  level: number;
+  hatched: boolean;
+  avatarGenerationId: string | null;
+  weekSteps: number;
+  isMe: boolean;
+}
+
+export interface SocialSnapshot {
+  weekStart: string;
+  friends: PlayerRow[];
+  top: PlayerRow[];
+  myRank: number | null;
+  myWeekSteps: number;
+}
+
+export async function fetchSocial(): Promise<SocialSnapshot> {
+  const res = await fetch("/api/social", { headers: { ...initDataHeader() } });
+  if (!res.ok) throw new Error(`GET /api/social failed: ${res.status}`);
+  return res.json();
+}
+
 /** Pet artwork as a cacheable image URL rather than an inlined data URL — see api/pet-image.ts.
  *  Used for lists (invited friends, leaderboard) where inlining would mean megabytes. */
 export function petImageUrl(userId: number, version: string | null): string {

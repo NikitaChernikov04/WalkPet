@@ -33,6 +33,21 @@ export function daysBetween(fromISO: string, toISO: string): number {
   return Math.round((to - from) / 86_400_000);
 }
 
+/** The Monday of the week containing `dateISO`, as "YYYY-MM-DD".
+ *
+ *  Pure string arithmetic on an already-local date, so two players in different timezones on the
+ *  same local date always land in the same weekly bucket — which is what makes the leaderboard
+ *  comparable without dragging per-user offsets into the ranking query. The one consequence:
+ *  around the week boundary a player whose local week has already rolled over is briefly in a
+ *  different bucket from one whose hasn't, so each sees the other at zero for those few hours.
+ *  That is the correct reading of "this week" for each of them, not a drift bug. */
+export function weekStart(dateISO: string): string {
+  const d = new Date(`${dateISO}T00:00:00.000Z`);
+  const dayOfWeek = d.getUTCDay(); // 0 = Sunday
+  d.setUTCDate(d.getUTCDate() + (dayOfWeek === 0 ? -6 : 1 - dayOfWeek));
+  return d.toISOString().slice(0, 10);
+}
+
 /** UTC epoch millis of the moment local midnight starts `dateISO` — i.e. the exact instant the
  *  player's new day begins. Used to window Google Fit queries on the local day. */
 export function localDayStartMs(dateISO: string, offsetMinutes: number): number {

@@ -33,6 +33,7 @@ import GoogleFitOnboarding from "./components/GoogleFitOnboarding";
 import PetNameEditor from "./components/PetNameEditor";
 import StatsScreen from "./components/StatsScreen";
 import ReferralPanel from "./components/ReferralPanel";
+import FriendsScreen from "./components/FriendsScreen";
 import {
   Heart,
   Smile,
@@ -102,6 +103,9 @@ function StatChip({ icon: Icon, label, value, max = 100 }: { icon: typeof Heart;
 
 let toastSeq = 0;
 
+/** Which full-screen panel is open over the pet, if any. */
+type Screen = null | "stats" | "referrals" | "friends";
+
 const ONBOARDING_SEEN_KEY = "walkpet_google_fit_onboarding_seen";
 
 export default function App() {
@@ -111,8 +115,9 @@ export default function App() {
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [stepTick, setStepTick] = useState(0);
   const [googleFitConnected, setGoogleFitConnected] = useState<boolean | null>(null);
-  const [showStats, setShowStats] = useState(false);
-  const [showReferrals, setShowReferrals] = useState(false);
+  // One value rather than a boolean per screen: they're mutually exclusive, and separate flags
+  // meant every toggle had to remember to clear the others.
+  const [screen, setScreen] = useState<Screen>(null);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [confirmingReset, setConfirmingReset] = useState(false);
   // Tracks the latest known step count purely so the Google Fit sync can tell "did today's
@@ -374,22 +379,24 @@ export default function App() {
         <div className="header-actions">
           <button
             type="button"
-            className="stats-toggle-btn"
-            onClick={() => {
-              setShowReferrals((s) => !s);
-              setShowStats(false);
-            }}
+            className={screen === "referrals" ? "stats-toggle-btn active" : "stats-toggle-btn"}
+            onClick={() => setScreen((s) => (s === "referrals" ? null : "referrals"))}
             aria-label="Пригласить друга"
           >
             <UserPlus size={18} />
           </button>
           <button
             type="button"
-            className="stats-toggle-btn"
-            onClick={() => {
-              setShowStats((s) => !s);
-              setShowReferrals(false);
-            }}
+            className={screen === "friends" ? "stats-toggle-btn active" : "stats-toggle-btn"}
+            onClick={() => setScreen((s) => (s === "friends" ? null : "friends"))}
+            aria-label="Рейтинг"
+          >
+            <Trophy size={18} />
+          </button>
+          <button
+            type="button"
+            className={screen === "stats" ? "stats-toggle-btn active" : "stats-toggle-btn"}
+            onClick={() => setScreen((s) => (s === "stats" ? null : "stats"))}
             aria-label="Статистика"
           >
             <BarChart3 size={18} />
@@ -409,10 +416,12 @@ export default function App() {
         onSync={() => sync(true)}
       />
 
-      {showReferrals ? (
-        <ReferralPanel onClose={() => setShowReferrals(false)} />
-      ) : showStats ? (
-        <StatsScreen onClose={() => setShowStats(false)} />
+      {screen === "referrals" ? (
+        <ReferralPanel onClose={() => setScreen(null)} />
+      ) : screen === "friends" ? (
+        <FriendsScreen onClose={() => setScreen(null)} />
+      ) : screen === "stats" ? (
+        <StatsScreen onClose={() => setScreen(null)} />
       ) : (
         <>
           {pet.stage !== "hatched" && (

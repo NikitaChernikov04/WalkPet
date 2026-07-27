@@ -276,6 +276,117 @@ body {
   margin-top: 2px;
 }
 
+/* --- Friends / leaderboard --- */
+
+.friends-panel {
+  text-align: left;
+}
+
+.friends-week {
+  font-family: "Space Grotesk", monospace;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--ink-faint);
+  margin: 0 0 10px;
+}
+
+.friends-myrank {
+  font-family: "Manrope", sans-serif;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--ink-soft);
+  text-align: center;
+  margin: 12px 0 0;
+  padding-top: 10px;
+  border-top: 2px dashed var(--ink);
+}
+
+.player-list {
+  list-style: none;
+  padding: 0;
+  margin: 12px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.player-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--card-tint);
+  border: 2px solid var(--ink);
+  border-radius: 14px;
+  padding: 8px 10px;
+}
+
+.player-row.me {
+  border-color: var(--lime);
+  background: color-mix(in srgb, var(--lime) 12%, var(--card-tint));
+}
+
+.player-place {
+  font-family: "Space Grotesk", monospace;
+  font-size: 0.85rem;
+  font-weight: 700;
+  min-width: 22px;
+  text-align: center;
+  color: var(--ink-soft);
+  flex: 0 0 auto;
+}
+
+.player-avatar {
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+  object-fit: contain;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.35rem;
+}
+
+.player-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.player-text strong {
+  font-family: "Manrope", sans-serif;
+  font-size: 0.82rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.player-text span {
+  font-family: "Manrope", sans-serif;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--ink-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.player-steps {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: "Space Grotesk", monospace;
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: var(--ink);
+  flex: 0 0 auto;
+}
+
+.stats-toggle-btn.active {
+  background: var(--lime);
+}
+
 /* --- Referral panel --- */
 
 .referral-panel {
