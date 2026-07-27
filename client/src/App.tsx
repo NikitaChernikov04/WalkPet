@@ -89,6 +89,11 @@ const MILESTONES = [
   { steps: 25000, icon: Trophy, label: "Вершина", toast: "🏆 Вершина покорена! +5 интеллекта", minLevel: 20 },
 ];
 
+// The bar a day has to clear to extend the streak — the first milestone, mirroring
+// DAILY_GOAL_STEPS in api/_lib/pet-logic.ts. Read off the list rather than restated so the dimmed
+// flame can never disagree with the food milestone sitting right below the ring.
+const DAILY_GOAL_STEPS = MILESTONES[0].steps;
+
 function StatChip({ icon: Icon, label, value, max = 100 }: { icon: typeof Heart; label: string; value: number; max?: number }) {
   return (
     <div className="stat-chip" title={label}>
@@ -402,7 +407,16 @@ export default function App() {
             <BarChart3 size={18} />
           </button>
           {pet.stage === "hatched" && (
-            <span className="streak-pill">
+            <span
+              className={todaySteps >= DAILY_GOAL_STEPS ? "streak-pill" : "streak-pill streak-pill-pending"}
+              aria-label={
+                todaySteps >= DAILY_GOAL_STEPS
+                  ? `Стрик ${pet.streak_days} дн., сегодня засчитан`
+                  : `Стрик ${pet.streak_days} дн., сегодня ещё не засчитан: осталось ${(
+                      DAILY_GOAL_STEPS - todaySteps
+                    ).toLocaleString("ru-RU")} шагов`
+              }
+            >
               <Flame size={16} /> {pet.streak_days}
             </span>
           )}

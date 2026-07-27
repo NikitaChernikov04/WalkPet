@@ -137,6 +137,21 @@ body {
   font-family: "Space Grotesk", monospace;
   font-size: 0.82rem;
   font-weight: 700;
+  /* Slow enough to read as the streak lighting up the moment the day's goal lands. */
+  transition:
+    background 260ms ease,
+    border-color 260ms ease,
+    color 260ms ease;
+}
+
+/* Today's goal not met yet. The streak is still standing — yesterday earned it — so the pill is
+   dimmed rather than hidden: the number still counts, it just hasn't been renewed today. Burning
+   it at full gold the way it used to would say the day is already banked, which is the thing the
+   evening reminder then contradicts. */
+.streak-pill-pending {
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.28);
+  color: rgba(255, 255, 255, 0.5);
 }
 
 /* --- Google Fit connect strip --- */
