@@ -1,0 +1,27 @@
+name: Streak reminders
+
+# Hourly, because the reminder window is 19:00-21:00 in each player's own timezone and every
+# hour is somebody's evening. Vercel's built-in cron only allows one run per day on the Hobby
+# plan, which is why the trigger lives here; the endpoint itself is plan-agnostic.
+#
+# Deliberately not on the hour: GitHub delays scheduled runs when the platform is busy, and the
+# top of the hour is the worst of it. A few minutes of drift is irrelevant for a two-hour window.
+#
+# Note that GitHub disables scheduled workflows in repositories with no activity for 60 days.
+on:
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch: # so it can be triggered by hand while testing
+
+jobs:
+  remind:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger streak reminders
+        run: |
+          response=$(curl --silent --show-error --fail-with-body \
+            --max-time 60 \
+            --write-out "\n%{http_code}" \
+            --header "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            https://walkpet.vercel.app/api/cron/streak-reminder)
+          echo "$response"
