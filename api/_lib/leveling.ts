@@ -6,6 +6,12 @@
 // each step is actually worth, so the stat bars aren't just decorative.
 const LEVEL_XP_BASE = 2000;
 
+// Lifetime steps at which an egg visibly cracks, and at which it hatches. They live here rather
+// than in pet-logic because referrals needs the hatch figure too, and pet-logic already imports
+// referrals — putting them in the shared rules module is what keeps that from becoming a cycle.
+export const EGG_CRACK_STEPS = 3000;
+export const EGG_HATCH_STEPS = 7000;
+
 export function xpForLevel(level: number): number {
   return (LEVEL_XP_BASE * level * (level + 1)) / 2;
 }

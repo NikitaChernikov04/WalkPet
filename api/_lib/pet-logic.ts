@@ -16,6 +16,8 @@ import {
 import {
   type EvolutionStage,
   effectiveEvolutionStage,
+  EGG_CRACK_STEPS,
+  EGG_HATCH_STEPS,
   LEVEL_UP_STAT_BONUS,
   levelForXp,
   nextEvolutionStageToward,
@@ -23,8 +25,7 @@ import {
   statXpMultiplier,
 } from "./leveling.js";
 
-export const EGG_CRACK_STEPS = 3000;
-export const EGG_HATCH_STEPS = 7000;
+export { EGG_CRACK_STEPS, EGG_HATCH_STEPS } from "./leveling.js";
 
 // `minLevel` gates a milestone behind pet level, so the daily-goal list itself grows as the
 // pet levels up instead of staying fixed at 4 forever.
@@ -440,9 +441,13 @@ export async function recordSteps(
   // writes nothing at all and is over after the single read batch above.
   if (writes.length > 0) await db.batch(writes, "write");
 
-  // Hatching is what confirms a referral was a real player rather than a throwaway account, so
-  // it's the moment the inviter's half of the reward is released. No-op if nobody invited them.
-  if (justHatched) {
+  // XP leaving zero is what confirms a referral was a real player rather than a throwaway
+  // account: XP counts steps walked beyond the hatch threshold with any granted head start
+  // subtracted out, so crossing it means this player has genuinely walked EGG_HATCH_STEPS — the
+  // same bar an uninvited player clears to hatch at all. It used to key off hatching itself,
+  // which invited players no longer do (they start hatched), so that would now never fire.
+  // No-op if nobody invited them.
+  if (xp > 0 && pet.xp === 0) {
     try {
       await grantInviterReward(userId);
     } catch (err) {
@@ -453,6 +458,39 @@ export async function recordSteps(
   await syncAvatarToStage(userId, updatedPet, evolutionStage, justHatched);
 
   return { pet: updatedPet, todaySteps: newSteps };
+}
+
+/** A hatched pet with no artwork has never had a first generation succeed — either it was created
+ *  already hatched (an invited player's head start) or an earlier attempt fell over. Expressed as
+ *  a state rather than an event on purpose: keying only off the hatching moment, as this used to,
+ *  left every pet that never had one stuck bare with nothing to retry it. */
+function needsFirstAvatar(pet: PetWithoutArt): boolean {
+  return pet.stage === "hatched" && pet.avatar_status === "none";
+}
+
+/** Kicks off the pet's very first avatar — completely bare/unclothed (see EVOLUTION_OUTFIT_PROMPT
+ *  ["baby"]), gear gets earned through evolution. A random seed is rolled once here and reused on
+ *  every future generation for extra visual consistency on top of the image-to-image reference.
+ *  Best-effort: the pet is perfectly usable without artwork. */
+async function startFirstAvatar(userId: number, pet: PetWithoutArt, evolutionStage: EvolutionStage): Promise<void> {
+  try {
+    const seed = Math.floor(Math.random() * 2 ** 31);
+    const gen = await startAvatarGeneration(buildPetPrompt(pet.species, "", pet.rarity, evolutionStage), { seed });
+    await setAvatarPending(userId, gen.id, "", seed, evolutionStage);
+    pet.avatar_status = "pending";
+  } catch (err) {
+    // Recorded as failed rather than left untouched: the caller's condition is a state, not an
+    // event, so leaving it would re-enter this on every sync and hammer the image API for as long
+    // as the fault lasts. Marked failed it stops, the player is told, and the manual generator in
+    // the app is right there.
+    console.error(`first avatar generation failed for user ${userId}`, err);
+    try {
+      await failAvatar(userId);
+      pet.avatar_status = "failed";
+    } catch {
+      // Leaving the status alone simply means the next sync tries again.
+    }
+  }
 }
 
 /** Brings the pet's artwork in line with the evolution stage its level has actually reached.
@@ -469,20 +507,8 @@ async function syncAvatarToStage(
   evolutionStage: EvolutionStage,
   justHatched: boolean,
 ): Promise<void> {
-  if (justHatched) {
-    // Best-effort: kick off the pet's very first avatar right away so the reveal feels alive —
-    // completely bare/unclothed (see EVOLUTION_OUTFIT_PROMPT["baby"]), gear gets earned through
-    // evolution. A random seed is rolled once here and reused on every future generation for
-    // extra visual consistency on top of the image-to-image reference.
-    try {
-      const seed = Math.floor(Math.random() * 2 ** 31);
-      const gen = await startAvatarGeneration(buildPetPrompt(pet.species, "", pet.rarity, evolutionStage), { seed });
-      await setAvatarPending(userId, gen.id, "", seed, evolutionStage);
-      pet.avatar_status = "pending";
-    } catch (err) {
-      console.error("hatch avatar generation failed", err);
-      // manual generation remains available
-    }
+  if (justHatched || needsFirstAvatar(pet)) {
+    await startFirstAvatar(userId, pet, evolutionStage);
     return;
   }
 
@@ -592,6 +618,14 @@ export async function getPetState(userId: number, tzOffset: number): Promise<Pet
   );
   const pet = (petRes.rows[0] as unknown as Pet | undefined) ?? (await getOrCreatePet(userId));
   const todaySteps = Number((stepsRes.rows[0] as unknown as { steps: number } | undefined)?.steps ?? 0);
+
+  // Also reconciled here, not only on sync, because an invited player's pet arrives already
+  // hatched and they may never have connected Google Fit — in which case recordSteps never runs
+  // and nothing else would ever notice the pet has no picture. Costs a call only in the state it
+  // repairs, which for everyone else is a few seconds right after hatching.
+  if (needsFirstAvatar(pet)) {
+    await startFirstAvatar(userId, pet, effectiveEvolutionStage(pet.level, pet.evolution_bonus_tiers));
+  }
   return { pet, todaySteps };
 }
 

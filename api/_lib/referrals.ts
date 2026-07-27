@@ -1,16 +1,19 @@
 import { db } from "./db.js";
 import { ensureSchema } from "./schema.js";
-import { EVOLUTION_ORDER } from "./leveling.js";
+import { EGG_HATCH_STEPS, EVOLUTION_ORDER } from "./leveling.js";
+import { pickRandomSpecies } from "./species.js";
 
-/** Steps handed to a newly invited player the moment their referral is attributed. The egg
- *  cracks at 3000 (EGG_CRACK_STEPS), so this is exactly "your egg is already cracking" — an
- *  instant, visible payoff on first launch, while the 4000 steps still standing between them
- *  and hatching keep the species/rarity reveal something they have to walk for.
+/** Steps handed to a newly invited player the moment their referral is attributed. Exactly the
+ *  hatching threshold, so the egg doesn't merely crack — it hatches on the spot and the invited
+ *  player meets a real creature, with a species and a rarity, on their very first launch. The
+ *  earlier 3000 left them staring at a progress bar 4000 steps from the reveal, which is a poor
+ *  thing to hand someone as a welcome.
  *
- *  Banked in pets.bonus_steps as well as lifetime_steps, so it accelerates hatching without
- *  inflating the level counter — XP subtracts bonus_steps precisely so levels stay a 1:1
- *  mirror of steps actually walked. */
-export const INVITEE_BONUS_STEPS = 3000;
+ *  Banked in pets.bonus_steps as well as lifetime_steps, so the head start never inflates the
+ *  level counter — XP subtracts bonus_steps precisely so levels stay a 1:1 mirror of steps
+ *  actually walked. An invited player therefore starts at level 0 like everyone else; what they
+ *  are given is the pet, not a shortcut past the levelling. */
+export const INVITEE_BONUS_STEPS = EGG_HATCH_STEPS;
 
 /** Free evolution tiers the inviter earns, one per confirmed referral, capped so the image
  *  generation each one triggers can't run away with the API budget. */
@@ -78,6 +81,8 @@ export async function attributeReferral(inviteeUserId: number, code: string): Pr
   const inviterUserId = Number((inviterRes.rows[0] as unknown as { id: number } | undefined)?.id ?? 0);
   if (!inviterUserId || inviterUserId === inviteeUserId) return none;
 
+  const { species, rarity } = pickRandomSpecies();
+
   try {
     await db.batch(
       [
@@ -86,13 +91,16 @@ export async function attributeReferral(inviteeUserId: number, code: string): Pr
                 ON CONFLICT (invitee_user_id) DO NOTHING`,
           args: [inviteeUserId, inviterUserId, code],
         },
-        // Pre-creates the pet carrying its head start. ON CONFLICT DO NOTHING keeps this safe if
-        // the pet already exists — in which case the player isn't new and gets no bonus, which
-        // is the intended outcome rather than a bug.
+        // Pre-creates the pet already hatched. Species and rarity are rolled here for the same
+        // reason recordSteps rolls them at the hatching moment — once, never reshuffled — and
+        // the artwork follows on the first sync, which is what syncAvatarToStage reconciles.
+        // ON CONFLICT DO NOTHING keeps this safe if the pet already exists: in that case the
+        // player isn't new and gets no bonus, which is the intended outcome rather than a bug.
         {
-          sql: `INSERT INTO pets (user_id, stage, lifetime_steps, bonus_steps) VALUES (?, 'cracking', ?, ?)
+          sql: `INSERT INTO pets (user_id, stage, species, rarity, lifetime_steps, bonus_steps, hatched_at)
+                VALUES (?, 'hatched', ?, ?, ?, ?, ?)
                 ON CONFLICT (user_id) DO NOTHING`,
-          args: [inviteeUserId, INVITEE_BONUS_STEPS, INVITEE_BONUS_STEPS],
+          args: [inviteeUserId, species, rarity, INVITEE_BONUS_STEPS, INVITEE_BONUS_STEPS, new Date().toISOString()],
         },
       ],
       "write",
@@ -105,10 +113,18 @@ export async function attributeReferral(inviteeUserId: number, code: string): Pr
   return { attributed: true, bonusSteps: INVITEE_BONUS_STEPS };
 }
 
-/** Pays the inviter once their invitee actually hatches a pet — i.e. after 7000 real steps.
+/** Pays the inviter once their invitee has *walked* EGG_HATCH_STEPS of their own — the bar an
+ *  uninvited player has to clear to hatch anything at all.
+ *
  *  Deferring it this far is the anti-farming measure: registering throwaway accounts earns
- *  nothing, because only genuine walking releases the reward. Called from recordSteps at the
- *  moment of hatching, and a no-op for anyone who wasn't referred. */
+ *  nothing, because only genuine walking releases the reward. It used to hang off the invitee's
+ *  hatching moment, which was the same bar expressed differently — but invited players now start
+ *  hatched, so that moment no longer happens for them and hanging the payout on it would have
+ *  meant inviters were never paid again. recordSteps therefore triggers on the invitee's XP
+ *  leaving zero instead, XP being defined as steps walked beyond the hatch threshold with the
+ *  granted head start subtracted out. Same bar, still 7000 steps of real walking.
+ *
+ *  A no-op for anyone who wasn't referred. */
 export async function grantInviterReward(inviteeUserId: number): Promise<void> {
   await ensureSchema();
   const res = await db.execute({

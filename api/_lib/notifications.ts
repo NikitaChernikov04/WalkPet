@@ -5,10 +5,18 @@ import { fetchDailySteps } from "./googleFit.js";
 import { getValidGoogleAccessToken, MILESTONES, recordSteps } from "./pet-logic.js";
 
 /** The evening window, in the player's own local time, during which a streak-risk nudge may be
- *  sent. The scheduler fires hourly and each player is eligible for at most one message per
- *  local day, so a two-hour window means "whichever of those two hours comes first". */
+ *  sent. Each player is eligible for at most one message per local day, so the window means
+ *  "whichever run lands in it first" — on a punctual day that is 19:xx.
+ *
+ *  It ends at 23:00 rather than 21:00 because the scheduler is GitHub Actions, whose cron is
+ *  explicitly best-effort: asked for hourly, it delivered four runs across the eight hours after
+ *  the workflow went live, spaced roughly three hours apart. A two-hour window is simply narrower
+ *  than the gaps, so it was routinely stepped straight over — the window must be wider than the
+ *  scheduler's jitter or the schedule may as well not exist. Anything before local midnight is
+ *  still worth sending: the day has not ended, so the streak is still savable, which is the whole
+ *  point of the message. */
 const WINDOW_START_HOUR = 19;
-const WINDOW_END_HOUR = 21;
+const WINDOW_END_HOUR = 23;
 
 /** A day counts toward the streak once the first milestone is reached — the same threshold
  *  recordSteps uses to decide a day was active, so the warning can never contradict the rule. */

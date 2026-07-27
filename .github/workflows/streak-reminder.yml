@@ -1,16 +1,23 @@
 name: Streak reminders
 
-# Hourly, because the reminder window is 19:00-21:00 in each player's own timezone and every
-# hour is somebody's evening. Vercel's built-in cron only allows one run per day on the Hobby
-# plan, which is why the trigger lives here; the endpoint itself is plan-agnostic.
+# Every 30 minutes, because the reminder window is an evening one in each player's own timezone
+# and every hour is somebody's evening. Vercel's built-in cron allows one run per day on the
+# Hobby plan, which is why the trigger lives here; the endpoint itself is plan-agnostic.
 #
-# Deliberately not on the hour: GitHub delays scheduled runs when the platform is busy, and the
-# top of the hour is the worst of it. A few minutes of drift is irrelevant for a two-hour window.
+# The rate asked for and the rate delivered are different things. GitHub's cron is best-effort
+# and drops runs under load: this workflow was first set to hourly and produced four runs in
+# eight hours, spaced around three hours apart, none of them near the requested minute. Asking
+# twice as often buys more chances at the queue; the endpoint is idempotent and each player can
+# be messaged at most once per local day, so extra runs cost nothing but a no-op request. The
+# real defence is on the other side — the eligibility window in notifications.ts is deliberately
+# wider than the observed jitter.
+#
+# Deliberately off the hour and half-hour: scheduled runs bunch up worst at :00.
 #
 # Note that GitHub disables scheduled workflows in repositories with no activity for 60 days.
 on:
   schedule:
-    - cron: "17 * * * *"
+    - cron: "17,47 * * * *"
   workflow_dispatch: # so it can be triggered by hand while testing
 
 jobs:
