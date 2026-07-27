@@ -43,7 +43,7 @@ export type CardFormat = "square" | "story";
 
 /** Story canvases are 9:16. Rendering that size here rather than letting Telegram letterbox a
  *  square means the card fills the screen instead of floating in bars. */
-const SIZES: Record<CardFormat, { width: number; height: number; art: number; name: number }> = {
+export const CARD_SIZE: Record<CardFormat, { width: number; height: number; art: number; name: number }> = {
   square: { width: 1080, height: 1080, art: 460, name: 88 },
   story: { width: 1080, height: 1920, art: 620, name: 104 },
 };
@@ -144,7 +144,7 @@ function artwork(pet: Pet, size: number, accent: string): Element {
 }
 
 export async function renderPetCard(pet: Pet, format: CardFormat = "square"): Promise<Buffer> {
-  const { width, height, art, name } = SIZES[format];
+  const { width, height, art, name } = CARD_SIZE[format];
   const scale = format === "story" ? 1.15 : 1;
   const accent = RARITY_COLOR[pet.rarity] ?? RARITY_COLOR.common;
   const walked = Math.max(0, pet.lifetime_steps - pet.bonus_steps);
