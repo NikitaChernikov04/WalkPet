@@ -3,7 +3,16 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- The scale is pinned, not just initialised. Without maximum-scale/user-scalable a Mini App
+         on iOS can be pinch-zoomed, and iOS will also shrink-to-fit of its own accord if anything
+         ever exceeds the viewport; either leaves the app rendering at a scale it did not choose,
+         which showed up as the same screen appearing at two different sizes and clipped on the
+         right. viewport-fit=cover lets the background reach into the safe areas rather than
+         leaving bands beside it. -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
     <title>WalkPet</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />

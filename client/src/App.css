@@ -38,12 +38,22 @@
   box-sizing: border-box;
 }
 
+html {
+  /* iOS otherwise inflates text on its own when it decides a column is too narrow, which changes
+     every measurement the layout is built on. */
+  -webkit-text-size-adjust: 100%;
+}
+
 body {
   margin: 0;
   background: radial-gradient(ellipse 900px 680px at 50% -12%, var(--canvas-glow) 0%, var(--canvas) 60%);
   background-attachment: fixed;
   color: var(--card);
   font-family: "Manrope", sans-serif;
+  /* Nothing here is meant to scroll sideways. Anything that ever exceeds the viewport — a long
+     unbroken username, a wide number — is clipped rather than allowed to widen the document,
+     because a document wider than the viewport is what makes iOS rescale the whole page. */
+  overflow-x: hidden;
 }
 
 .app-shell {
@@ -387,6 +397,10 @@ body {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  /* Friends and all-players hold very different numbers of rows, and letting the panel collapse
+     to one row and spring back made switching between them jump. Three rows' worth of floor is
+     enough to keep the two tabs feeling like the same panel. */
+  min-height: 196px;
 }
 
 .player-row {
