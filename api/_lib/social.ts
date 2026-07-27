@@ -46,8 +46,12 @@ export interface SocialSnapshot {
 }
 
 /** Friends are the referral graph in both directions — everyone this player invited plus
- *  whoever invited them — with the player themselves folded in so the list doubles as a
- *  standings table they can find themselves in. */
+ *  whoever invited them — union the explicit `friendships` rows, with the player themselves
+ *  folded in so the list doubles as a standings table they can find themselves in.
+ *
+ *  Two sources rather than one because they mean different things: a referral records who
+ *  recruited whom and releases a reward, while a friendship is just "these two compare steps".
+ *  Keeping them apart means people can be connected without anyone being credited a referral. */
 export async function getSocialSnapshot(userId: number, tzOffset: number): Promise<SocialSnapshot> {
   await ensureSchema();
   const week = weekStart(localDate(tzOffset));
@@ -62,8 +66,10 @@ export async function getSocialSnapshot(userId: number, tzOffset: number): Promi
               WHERE u.id = ?
                  OR u.id IN (SELECT invitee_user_id FROM referrals WHERE inviter_user_id = ?)
                  OR u.id IN (SELECT inviter_user_id FROM referrals WHERE invitee_user_id = ?)
+                 OR u.id IN (SELECT user_b FROM friendships WHERE user_a = ?)
+                 OR u.id IN (SELECT user_a FROM friendships WHERE user_b = ?)
               ORDER BY week_steps DESC, u.id ASC`,
-        args: [week, userId, userId, userId],
+        args: [week, userId, userId, userId, userId, userId],
       },
       {
         // Only players who actually moved this week appear, so the board never opens on a wall

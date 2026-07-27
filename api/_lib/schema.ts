@@ -81,6 +81,19 @@ const TABLES: [name: string, ddl: string][] = [
     )`,
   ],
   [
+    // Mutual friendship, kept separate from `referrals` on purpose: that table asserts who
+    // recruited whom and drives reward payouts, so it must never be written to just to make two
+    // people visible to each other. Rows are stored canonically with user_a < user_b, which is
+    // what makes the pair a primary key and the relationship symmetric by construction.
+    "friendships",
+    `CREATE TABLE IF NOT EXISTS friendships (
+      user_a ${FK} NOT NULL REFERENCES users(id),
+      user_b ${FK} NOT NULL REFERENCES users(id),
+      created_at ${TS},
+      PRIMARY KEY (user_a, user_b)
+    )`,
+  ],
+  [
     // Weekly step totals, kept up to date incrementally by recordSteps rather than by a nightly
     // job, so the friends leaderboard is always live and costs no extra round trip.
     "step_weeks",
@@ -109,6 +122,9 @@ const TABLES: [name: string, ddl: string][] = [
 const INDEXES = [
   "CREATE INDEX IF NOT EXISTS idx_referrals_inviter ON referrals (inviter_user_id)",
   "CREATE INDEX IF NOT EXISTS idx_step_weeks_week ON step_weeks (week_start, steps)",
+  // The primary key already covers lookups by user_a; friendship is symmetric, so the reverse
+  // direction needs its own index.
+  "CREATE INDEX IF NOT EXISTS idx_friendships_b ON friendships (user_b)",
 ];
 
 // Columns added after a table first shipped, as [table, column, definition]. Applied only when
