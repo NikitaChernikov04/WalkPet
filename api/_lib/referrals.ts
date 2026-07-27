@@ -141,6 +141,11 @@ export async function grantInviterReward(inviteeUserId: number): Promise<void> {
         sql: "UPDATE referrals SET inviter_reward_state = 'granted' WHERE invitee_user_id = ? AND inviter_reward_state = 'pending'",
         args: [inviteeUserId],
       },
+      // The inviter will normally have a pet already — opening the app at all creates one, and
+      // they had to open it to get a code. But if they somehow don't, the UPDATE below would
+      // match nothing while the row above still records the reward as paid, quietly swallowing
+      // it. Creating the egg first makes the payout land no matter what.
+      { sql: "INSERT INTO pets (user_id) VALUES (?) ON CONFLICT (user_id) DO NOTHING", args: [inviterUserId] },
       {
         sql: `UPDATE pets SET evolution_bonus_tiers = evolution_bonus_tiers + 1
               WHERE user_id = ? AND evolution_bonus_tiers < ?`,
